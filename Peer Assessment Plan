@@ -1,0 +1,287 @@
+PEER ASSESSMENT PLAN — STATARPLS
+DATA 501, Victoria University of Wellington
+Author: Taruna Dagur (Student ID 300686751)
+
+============================================================
+1. INSTALLATION AND VERIFICATION PIPELINE
+============================================================
+
+Prerequisites: a working R installation and the devtools package.
+
+Step 1 — Install devtools if you do not already have it:
+
+    install.packages("devtools")
+
+Step 2 — Install StatARPLS directly from GitHub:
+
+    devtools::install_github("tardagur/StatARPLS")
+
+Step 3 — Load the package:
+
+    library(StatARPLS)
+
+Step 4 — Clone or download the repository locally so you can run the
+automated test suite (devtools::test() must be run from inside the
+package source directory, not from an installed copy):
+
+    git clone https://github.com/tardagur/StatARPLS.git
+    setwd("StatARPLS")
+
+Step 5 — Run the automated test suite:
+
+    devtools::test()
+
+Expected result at this snapshot stage:
+
+    [ FAIL 0 | WARN 0 | SKIP 0 | PASS 8 ]
+
+If your result differs from this, please note the exact output you see
+and include it in your feedback — a different pass count most likely
+means your local R or package versions differ from the ones this
+snapshot was built and tested against, and that mismatch is itself
+useful information for me to record.
+
+Step 6 (optional but recommended) — Run a full package check:
+
+    devtools::check()
+
+This performs a stricter validation than devtools::test() alone
+(documentation consistency, namespace correctness, etc.) and is a good
+second data point if anything in Step 5 looks unexpected.
+
+
+============================================================
+2. COMPREHENSIVE OVERVIEW OF COMPLETED FUNCTIONS
+============================================================
+
+This snapshot contains four active, verifiable components. Everything
+else referenced elsewhere in project documentation (automatic parameter
+selection, bootstrap uncertainty, compiled fitting engine, predict() and
+compare()) is explicitly NOT part of this snapshot — see Section 4.
+
+------------------------------------------------------------
+2.1  StatARPLSResult()  —  R/constructors.R
+------------------------------------------------------------
+Role: the S3 object constructor and structural validator. Every fitting
+function in the package returns an object of this class, so this is the
+one data shape you need to understand to read anything else.
+
+Inspect its signature and arguments:
+
+    args(StatARPLSResult)
+
+Build a small example directly and inspect the result:
+
+    test_signal     <- c(10, 12, 11, 15, 10)
+    test_wavenumber <- 1:5
+    test_baseline   <- c(9, 9.5, 10, 10.5, 9)
+
+    result <- StatARPLSResult(
+      signal            = test_signal,
+      wavenumber        = test_wavenumber,
+      baseline          = test_baseline,
+      corrected         = test_signal - test_baseline,
+      residual_variance = 1.2,
+      stability_bounds  = cbind(rep(-1, 5), rep(1, 5)),
+      lambda            = 100,
+      n_iter            = 5L,
+      converged         = TRUE,
+      call              = quote(fit_arpls(test_signal))
+    )
+
+    class(result)
+    str(result)
+    print(result)
+
+What to check: class(result) should return "StatARPLSResult", and
+str(result) should show all ten fields (signal, wavenumber, baseline,
+corrected, residual_variance, stability_bounds, lambda, n_iter,
+converged, call) with the types and lengths described in the project's
+Design Plan.
+
+------------------------------------------------------------
+2.2  fit_arpls()  —  R/fit-arpls.R
+------------------------------------------------------------
+Role: the core ARPLS baseline-fitting loop, implemented in base R for
+this snapshot stage (no compiled code is part of this build yet).
+
+Inspect its signature and arguments:
+
+    args(fit_arpls)
+
+Run it on a synthetic spectrum and inspect the result:
+
+    set.seed(1)
+    n <- 200
+    demo_wavenumber <- 1:n
+    demo_baseline   <- 5 + 0.01 * demo_wavenumber
+    demo_peak       <- 50 * dnorm(demo_wavenumber, mean = 100, sd = 5)
+    demo_signal     <- demo_baseline + demo_peak + rnorm(n, sd = 0.3)
+
+    fit <- fit_arpls(demo_signal, demo_wavenumber, lambda = 1e5)
+
+    class(fit)
+    str(fit)
+    fit$converged
+    fit$n_iter
+    fit$lambda
+
+What to check: fit$converged should be TRUE within the default iteration
+limit, and fit$baseline should track the slow linear drift in
+demo_baseline without following the sharp peak — plotting it (see 2.4
+below) is the clearest way to see this.
+
+------------------------------------------------------------
+2.3  print() and summary()  —  R/methods.R
+------------------------------------------------------------
+Role: console reporting methods dispatched on the StatARPLSResult class.
+
+    print(fit)
+    summary(fit)
+    class(summary(fit))
+
+What to check: print(fit) should show the call, signal length,
+convergence status, iteration count, and selected lambda. summary(fit)
+should return an object of class "summary.StatARPLSResult" (check via
+the class() call above) with residual quantiles and stability-band
+width — not a bare printed list.
+
+------------------------------------------------------------
+2.4  plot()  —  R/methods.R
+------------------------------------------------------------
+Role: base R graphics overlay of the raw signal, the fitted baseline,
+and the stability band. No ggplot2 or other plotting package dependency
+is used.
+
+    plot(fit)
+    plot(fit, show_band = FALSE)
+
+What to check: the first call should draw the raw signal, the fitted
+baseline overlaid in a contrasting colour, and a shaded stability band.
+The second call should draw the same plot without the shaded band, to
+confirm the show_band argument actually toggles it rather than being
+decorative.
+
+
+============================================================
+3. ADVERSARIAL TESTING AND ERROR HANDLING EXPECTATIONS
+============================================================
+
+Per the assignment's requirement to stress-test boundary conditions,
+please try the following inputs and compare what you see against what
+is documented below. Some of these are handled gracefully by design;
+one known case is not yet handled gracefully, and that gap is disclosed
+here deliberately rather than left for you to discover.
+
+------------------------------------------------------------
+3.1  Mismatched vector lengths — HANDLED GRACEFULLY
+------------------------------------------------------------
+    fit_arpls(signal = c(1, 2, 3, 4, 5), wavenumber = c(1, 2, 3))
+
+Expected: a clean, custom error message stating that wavenumber must be
+the same length as signal, raised by an explicit check inside
+fit_arpls() — not a low-level R crash or a cryptic recycling warning.
+
+------------------------------------------------------------
+3.2  Malformed stability_bounds matrix — HANDLED GRACEFULLY
+------------------------------------------------------------
+    StatARPLSResult(
+      signal = 1:5, wavenumber = 1:5, baseline = 1:5, corrected = 1:5,
+      residual_variance = 1, stability_bounds = matrix(0, nrow = 5, ncol = 3),
+      lambda = 100, n_iter = 5L, converged = TRUE, call = quote(f())
+    )
+
+Expected: a clean, custom error stating that stability_bounds must have
+exactly 2 columns, raised by validate_StatARPLSResult() before the
+object is ever returned to the caller.
+
+------------------------------------------------------------
+3.3  Non-positive lambda — HANDLED GRACEFULLY
+------------------------------------------------------------
+    StatARPLSResult(
+      signal = 1:5, wavenumber = 1:5, baseline = 1:5, corrected = 1:5,
+      residual_variance = 1, stability_bounds = cbind(rep(-1,5), rep(1,5)),
+      lambda = -5, n_iter = 1L, converged = TRUE, call = quote(f())
+    )
+
+Expected: a clean, custom error stating that lambda must be a single
+strictly positive finite number.
+
+------------------------------------------------------------
+3.4  Non-scalar converged flag — HANDLED GRACEFULLY
+------------------------------------------------------------
+    StatARPLSResult(
+      signal = 1:5, wavenumber = 1:5, baseline = 1:5, corrected = 1:5,
+      residual_variance = 1, stability_bounds = cbind(rep(-1,5), rep(1,5)),
+      lambda = 10, n_iter = 1L, converged = c(TRUE, FALSE), call = quote(f())
+    )
+
+Expected: a clean, custom error stating that converged must be a single
+logical value.
+
+------------------------------------------------------------
+3.5  Non-numeric signal input — KNOWN GAP, NOT YET HANDLED GRACEFULLY
+------------------------------------------------------------
+    fit_arpls(signal = c("a", "b", "c"), wavenumber = 1:3)
+
+Expected at this snapshot stage: this will NOT produce a clean custom
+error. Neither fit_arpls() nor the object validator currently checks
+is.numeric() on the input vectors — only vector length is checked. A
+character vector passed here will fail deep inside the numeric fitting
+routine with a generic, less informative base R error (something in the
+family of "non-numeric argument to a binary operator" or a matrix
+construction failure), rather than failing immediately with a clear
+message at the point of input.
+
+This is a genuine, currently-open gap, not an oversight in this
+document — please record what error text you actually see when you run
+this, since the exact failure point is useful information for closing
+it. Explicit is.numeric() input validation is planned before the Draft
+Package milestone (Week 10).
+
+
+============================================================
+4. ALIGNMENT WITH PROSPECTIVE REFACTORING MILESTONES
+============================================================
+
+This section is an architectural update note, not a description of
+code present in this snapshot. None of the following is installed by
+the devtools::install_github() call in Section 1 — it is documented
+here so you understand what is coming and why, and so your review of
+the current snapshot is judged against the right scope.
+
+Following supervisor feedback on the package's long-term statistical
+design, two changes are being made to the parameter-selection and
+uncertainty-quantification code (currently held outside the active
+snapshot and staged for the Weeks 10 to 14 development window):
+
+1. Lambda selection is being moved from a simple fixed-grid sweep to a
+   fully independent Generalized Cross-Validation (GCV) scoring metric.
+   The effective degrees of freedom needed for the GCV score will be
+   estimated via a stochastic Hutchinson trace estimator applied to the
+   fitted model's hat matrix, computed entirely outside of ARPLS's own
+   internal reweighting-loop convergence check — so lambda selection
+   depends on an independent statistical criterion, not on whichever
+   candidate happened to converge fastest.
+
+2. Baseline uncertainty quantification is being moved from a standard
+   independent-and-identically-distributed (i.i.d.) residual bootstrap
+   to a Moving Block Bootstrap (MBB). Spectroscopic residuals are
+   typically autocorrelated (shared instrument response and unmodelled
+   local curvature between neighbouring points), and an i.i.d. bootstrap
+   on such residuals understates the true uncertainty of the fitted
+   baseline. The Moving Block Bootstrap resamples contiguous blocks of
+   residuals rather than individual points, preserving local
+   autocorrelation structure in each bootstrap replicate.
+
+Both changes are scoped, documented design decisions in response to
+named supervisor feedback, not features you should expect to find or
+test in this Week 7 snapshot. If you would like to comment on the
+planned design itself (rather than the code you can currently run),
+that feedback is welcome and will be recorded separately from your
+review of the active snapshot above.
+
+
+============================================================
+END OF DOCUMENT
+============================================================
