@@ -14,12 +14,14 @@ Description: Provides an from-first-principles implementation of Asymmetrically
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-Imports: 
     graphics,
     grDevices,
     Matrix,
     stats
-Suggests: 
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.1.0
+Depends: R (>= 4.0.0)
+Imports: stats, Matrix
+Suggests: testthat (>= 3.0.0), knitr, rmarkdown
+VignetteBuilder: knitr
