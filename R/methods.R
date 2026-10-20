@@ -22,6 +22,7 @@
 #' * GCV grid summary, if present as an attribute
 #' * bootstrap replicate summary, if present as an attribute
 #'
+#' @method print StatARPLSResult
 #' @export
 print.StatARPLSResult <- function(x, ...) {
   cat("<StatARPLSResult>\n")
@@ -72,6 +73,7 @@ print.StatARPLSResult <- function(x, ...) {
 #' * `bootstrap` — the object's `"bootstrap"` attribute, or `NULL` if
 #'   absent
 #'
+#' @method summary StatARPLSResult
 #' @export
 summary.StatARPLSResult <- function(object, ...) {
   residual_quantiles <- stats::quantile(
@@ -108,6 +110,7 @@ summary.StatARPLSResult <- function(object, ...) {
 #' formatted diagnostics table to the console, including GCV and
 #' bootstrap sections when the underlying data is present.
 #'
+#' @method print summary.StatARPLSResult
 #' @export
 print.summary.StatARPLSResult <- function(x, ...) {
   cat("<summary.StatARPLSResult>\n\n")
@@ -144,33 +147,44 @@ print.summary.StatARPLSResult <- function(x, ...) {
 #' Produces a base R graphics overlay showing the raw signal, the fitted
 #' ARPLS baseline, and the bootstrap stability band, on a single plotting
 #' surface. No third-party plotting engine is used; this method depends
-#' only on the `graphics` package already declared in `Imports`.
+#' only on the `graphics` and `grDevices` packages already declared in
+#' `Imports`. The plotting region's y-axis is sized to accommodate the
+#' signal, the baseline, and (when drawn) the stability band, so the band
+#' is never clipped off the visible plot.
 #'
 #' @param x An object of class `StatARPLSResult`.
 #' @param show_band A single logical value; if `TRUE` (the default), the
 #'   bootstrap stability band from `x$stability_bounds` is drawn as a
-#'   shaded polygon beneath the baseline.
+#'   shaded polygon beneath the baseline, and included in the legend. If
+#'   `FALSE`, the band is neither drawn nor listed in the legend.
 #' @param ... Additional arguments passed through to the underlying
-#'   `graphics::plot()` call (e.g. `main`, `xlab`, `col`).
+#'   `graphics::plot()` call (e.g. `main`, `xlab`, `ylab`, `col`, `ylim`).
+#'   Any of these supplied here override this method's own defaults rather
+#'   than conflicting with them.
 #'
 #' @return `NULL`, invisibly. Called for its side effect of drawing to the
 #' active graphics device:
 #' * raw signal as a line trace
 #' * fitted baseline overlaid in a contrasting colour
 #' * optional shaded stability band (`show_band = TRUE`)
-#' * legend identifying each series
+#' * legend identifying each series actually drawn
 #'
 #' @export
 plot.StatARPLSResult <- function(x, show_band = TRUE, ...) {
   wavenumber <- x$wavenumber
+  dots <- list(...)
 
-  graphics::plot(
-    wavenumber, x$signal,
-    type = "l",
-    xlab = "Wavenumber",
-    ylab = "Intensity",
-    ...
-  )
+  if (is.null(dots$ylim)) {
+    dots$ylim <- range(
+      x$signal, x$baseline,
+      if (isTRUE(show_band)) x$stability_bounds
+    )
+  }
+  if (is.null(dots$xlab)) dots$xlab <- "Wavenumber"
+  if (is.null(dots$ylab)) dots$ylab <- "Intensity"
+  if (is.null(dots$type)) dots$type <- "l"
+
+  do.call(graphics::plot, c(list(x = wavenumber, y = x$signal), dots))
 
   if (isTRUE(show_band)) {
     graphics::polygon(
@@ -183,17 +197,30 @@ plot.StatARPLSResult <- function(x, show_band = TRUE, ...) {
 
   graphics::lines(wavenumber, x$baseline, col = "red", lwd = 2)
 
+  legend_labels <- c("Raw signal", "Fitted baseline")
+  legend_col    <- c("black", "red")
+  legend_lty    <- c(1, 1)
+  legend_pch    <- c(NA, NA)
+
+  if (isTRUE(show_band)) {
+    legend_labels <- c(legend_labels, "Stability band")
+    legend_col    <- c(legend_col, "grey")
+    legend_lty    <- c(legend_lty, NA)
+    legend_pch    <- c(legend_pch, 15)
+  }
+
   graphics::legend(
     "topright",
-    legend = c("Raw signal", "Fitted baseline", "Stability band"),
-    col    = c("black", "red", "grey"),
-    lty    = c(1, 1, NA),
-    pch    = c(NA, NA, 15),
+    legend = legend_labels,
+    col    = legend_col,
+    lty    = legend_lty,
+    pch    = legend_pch,
     bty    = "n"
   )
 
   invisible(NULL)
 }
+
 #' Predict baseline values on a new wavenumber grid
 #'
 #' @description
@@ -214,9 +241,13 @@ plot.StatARPLSResult <- function(x, show_band = TRUE, ...) {
 #' @param rule A single integer, `1` or `2`, controlling behaviour for
 #'   `newdata` points outside the fitted wavenumber range. `1` (the
 #'   default) returns `NA` for out-of-range points; `2` extends the
-#'   boundary value as a constant. Passed through to `stats::approx()`;
-#'   ignored (with a warning) for `method = "spline"`, which always
-#'   extrapolates.
+#'   boundary value as a constant. Honoured by both methods: for
+#'   `method = "linear"` it is passed to `stats::approx()`, and for
+#'   `method = "spline"` out-of-range points are clamped to the fitted
+#'   range before interpolation, so `rule = 2` returns the boundary
+#'   baseline value rather than a cubic extrapolation. Under
+#'   `method = "spline"`, `rule = 1` also raises a warning that
+#'   extrapolation is unsupported.
 #' @param ... Additional arguments passed to or from other methods; unused
 #'   here and retained only for S3 signature compatibility with
 #'   `predict.default()`.
@@ -262,10 +293,17 @@ predict.StatARPLSResult <- function(object,
     }
 
     fitted_range <- range(object$wavenumber)
+    # rule = 2: clamp out-of-range points to the boundary so the cubic spline
+    # is never evaluated outside the fitted range (constant extension).
+    spline_xout <- if (rule == 2L) {
+      pmin(pmax(newdata, fitted_range[1]), fitted_range[2])
+    } else {
+      newdata
+    }
     prediction <- stats::spline(
       x    = object$wavenumber,
       y    = object$baseline,
-      xout = newdata
+      xout = spline_xout
     )$y
 
     if (rule == 1L) {
@@ -275,6 +313,7 @@ predict.StatARPLSResult <- function(object,
 
   prediction
 }
+
 #' Compare multiple StatARPLSResult fits
 #'
 #' @description
@@ -308,7 +347,11 @@ compare <- function(x, ...) {
 #' @param x An object of class `StatARPLSResult`, used as the first row
 #'   of the comparison table.
 #' @param ... One or more additional objects of class `StatARPLSResult`
-#'   to compare against `x`. Objects of any other class trigger an error.
+#'   to compare against `x`. Every object passed here must be a
+#'   `StatARPLSResult`; any other class triggers an error rather than
+#'   being silently dropped, since a dropped object would otherwise shift
+#'   the automatic row labels out of alignment with the fits they
+#'   describe.
 #' @param labels An optional character vector of row labels, the same
 #'   length as the total number of objects being compared (`x` plus all
 #'   `...` arguments). Defaults to the deparsed argument expressions
@@ -328,17 +371,13 @@ compare <- function(x, ...) {
 #'
 #' @export
 compare.StatARPLSResult <- function(x, ..., labels = NULL) {
+  if (!inherits(x, "StatARPLSResult")) {
+    stop("`x` must be a StatARPLSResult object.", call. = FALSE)
+  }
+
   dots <- list(...)
-  dot_names <- names(dots)
 
-  # Separate trailing `labels =` from genuine StatARPLSResult objects,
-  # in case it arrived positionally through `...` rather than by name.
-  is_fit <- vapply(dots, inherits, logical(1), what = "StatARPLSResult")
-  extra_fits <- dots[is_fit]
-
-  all_fits <- c(list(x), extra_fits)
-
-  if (length(all_fits) < 2) {
+  if (length(dots) < 1) {
     stop(
       "`compare()` requires at least two StatARPLSResult objects: `x` ",
       "plus one or more via `...`.",
@@ -346,9 +385,18 @@ compare.StatARPLSResult <- function(x, ..., labels = NULL) {
     )
   }
 
-  if (!all(vapply(all_fits, inherits, logical(1), what = "StatARPLSResult"))) {
-    stop("All objects passed to `compare()` must be of class StatARPLSResult.", call. = FALSE)
+  not_fit <- !vapply(dots, inherits, logical(1), what = "StatARPLSResult")
+  if (any(not_fit)) {
+    stop(
+      "All objects passed to `compare()` via `...` must be of class ",
+      "StatARPLSResult; argument position(s) ",
+      paste(which(not_fit), collapse = ", "),
+      " (counting from the first `...` argument) are not.",
+      call. = FALSE
+    )
   }
+
+  all_fits <- c(list(x), dots)
 
   if (is.null(labels)) {
     call_args <- match.call(expand.dots = TRUE)
@@ -368,7 +416,7 @@ compare.StatARPLSResult <- function(x, ..., labels = NULL) {
 
     data.frame(
       lambda           = fit$lambda,
-      df_effective      = if (is.null(gcv_info)) NA_real_ else gcv_info$df_effective,
+      df_effective     = if (is.null(gcv_info)) NA_real_ else gcv_info$df_effective,
       n_iter           = fit$n_iter,
       converged        = fit$converged,
       mean_band_width  = band_width,
@@ -391,6 +439,7 @@ compare.StatARPLSResult <- function(x, ..., labels = NULL) {
 #' @return `x`, invisibly. Called for its side effect of printing the
 #' comparison table to the console as a formatted data frame.
 #'
+#' @method print compare.StatARPLSResult
 #' @export
 print.compare.StatARPLSResult <- function(x, ...) {
   cat("<compare.StatARPLSResult>\n\n")

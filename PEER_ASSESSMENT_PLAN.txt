@@ -1,0 +1,316 @@
+PEER ASSESSMENT PLAN (UPDATED VERSION 2) - STATARPLS
+DATA 501, Victoria University of Wellington
+Author: Taruna Dagur (Student ID 300686751)
+
+This version replaces the Week 7 snapshot plan. It (a) describes the
+current package, and (b) records how each finding from the peer review of
+the first plan was handled (Section 5).
+
+============================================================
+1. INSTALLATION AND VERIFICATION PIPELINE
+============================================================
+
+Where to type each command: lines marked [R] go in the R console;
+lines marked [shell] go in a terminal (bash, PowerShell or Git Bash).
+Do not mix them: "setwd()" is an R function and fails in a shell.
+
+Prerequisites
+  - R, and the packages "remotes" and "devtools".
+  - A C++ compiler toolchain, because the package contains compiled code:
+    Rtools on Windows, Xcode command line tools on macOS, build-essential
+    on Linux.
+  - Please record your versions and include them in your report:
+
+    [R]  R.version.string
+    [R]  packageVersion("devtools")
+    [R]  packageVersion("remotes")
+
+  -   - The author tested with: R 4.5.2 (2025-10-31, Windows), devtools 2.5.2,
+    remotes 2.5.0.
+
+Step 1 [R] - Install the helper packages if needed:
+
+    install.packages(c("remotes", "devtools"))
+
+Step 2 [R] - Install StatARPLS from GitHub:
+
+    remotes::install_github("tardagur/StatARPLS")
+
+  Note: installation compiles C++ code and can take a minute or two.
+
+Step 3 [R] - Load the package:
+
+    library(StatARPLS)
+
+Step 4 [shell] - Clone the repository so the test suite can be run from
+the source directory (devtools::test() must run from the package source,
+not from an installed copy):
+
+    git clone https://github.com/tardagur/StatARPLS.git
+    cd StatARPLS
+
+Step 5 [R] - From the cloned folder (open the StatARPLS.Rproj file, or use
+setwd() to the folder), load and test:
+
+    devtools::load_all()
+    devtools::test()
+
+  Expected result:
+
+    [ FAIL 0 | WARN 0 | SKIP 0 | PASS 98 ]
+
+  If your count differs, report the exact output. A different count
+  usually means a different local R or package version, which is itself
+  useful information.
+
+  Note: devtools::test() prints "The following object is masked from
+  package:StatARPLS: compare". This is harmless: the testthat package has
+  its own function named compare(). In your own session, call
+  StatARPLS::compare() if you load both packages.
+
+Step 6 [R] (recommended) - Full package check:
+
+    devtools::check()
+
+  Expected: 0 errors | 0 warnings | 0 notes. (The check builds the
+  vignette and takes several minutes. Report anything that is not 0.)
+
+Step 7 [R] (optional) - Read the introduction vignette:
+
+    vignette("StatARPLS-introduction", package = "StatARPLS")
+
+  (If it is not listed, the package was installed without building
+  vignettes; open vignettes/StatARPLS-introduction.Rmd instead.)
+
+
+============================================================
+2. OVERVIEW OF COMPONENTS
+============================================================
+
+All functions return, or act on, one S3 class: "StatARPLSResult".
+
+2.1  StatARPLSResult()            R/constructors.R
+     Validated constructor for the result object (ten core fields).
+
+2.2  fit_arpls()                  R/fit-arpls.R
+     Fits an ARPLS baseline for a user-supplied lambda. The linear
+     solve runs in a compiled Rcpp/RcppArmadillo engine
+     (src/arpls_solver.cpp); a pure-R reference engine is kept for tests.
+
+2.3  gcv_select_lambda()          R/parameter-selection.R
+     Chooses lambda automatically by generalised cross-validation, with
+     the effective degrees of freedom estimated by Hutchinson's
+     stochastic trace estimator. Warns if the selected lambda is the
+     smallest value in the grid (GCV can under-smooth reweighted fits).
+
+2.4  bootstrap_baseline_uncertainty()   R/parameter-selection.R
+     Moving-block residual bootstrap giving a baseline "stability band"
+     (default B = 200). The band measures sampling stability at fixed
+     lambda; it is NOT a measure of the baseline's bias.
+
+2.5  S3 methods                   R/methods.R
+     print(), summary() (with print.summary()), plot(), predict(),
+     compare() (with print.compare()).
+
+Quick example to try (a synthetic spectrum with one peak):
+
+    set.seed(1)
+    n <- 300
+    wavenumber <- seq(400, 1800, length.out = n)
+    baseline_true <- 2 + 0.002 * wavenumber
+    signal <- baseline_true + 3 * exp(-((wavenumber - 1000) / 40)^2) +
+      rnorm(n, sd = 0.05)
+
+    fit  <- gcv_select_lambda(signal, wavenumber, seed = 1)
+    boot <- bootstrap_baseline_uncertainty(fit, B = 50, seed = 2)
+
+    print(boot)
+    summary(boot)
+    plot(boot)
+    plot(boot, show_band = FALSE)
+    predict(boot, newdata = c(500, 900, 1500))
+    compare(fit, boot)
+
+What to check: the red baseline lies under the peak and follows the slow
+upward drift; the shaded band is thin; with show_band = FALSE the band AND
+its legend entry both disappear; predict() returns three values.
+
+
+============================================================
+3. ADVERSARIAL TESTING AND ERROR HANDLING EXPECTATIONS
+============================================================
+
+Each case below should now fail (or warn) with a clear, package-level
+message, not a low-level R error. Please record the text you actually see.
+
+3.1  Mismatched lengths
+    fit_arpls(signal = c(1, 2, 3, 4, 5), wavenumber = c(1, 2, 3))
+    Expected: "`wavenumber` must be the same length as `signal`."
+
+3.2  Malformed stability_bounds matrix
+    StatARPLSResult(signal = 1:5, wavenumber = 1:5, baseline = 1:5,
+      corrected = 1:5, residual_variance = 1,
+      stability_bounds = matrix(0, nrow = 5, ncol = 3), lambda = 100,
+      n_iter = 5L, converged = TRUE, call = quote(f()))
+    Expected: error about stability_bounds needing 5 rows and 2 columns.
+
+3.3  Non-positive lambda
+    (same as 3.2 with stability_bounds = cbind(rep(-1, 5), rep(1, 5))
+     and lambda = -5)
+    Expected: "`lambda` must be a single strictly positive finite number."
+
+3.4  Non-scalar converged flag
+    (same as 3.3 with lambda = 10 and converged = c(TRUE, FALSE))
+    Expected: "`converged` must be a single logical value."
+
+3.5  Non-numeric signal            (previously a KNOWN GAP; now handled)
+    fit_arpls(signal = c("a", "b", "c"), wavenumber = 1:3)
+    Expected: "`signal` must be a numeric vector."
+
+3.6  Non-finite signal             (new; from peer review)
+    sig <- rnorm(60); sig[30] <- NA
+    fit_arpls(sig, 1:60, lambda = 1e5)
+    Expected: error naming the non-finite position(s), e.g.
+    "`signal` contains non-finite values (NA/NaN/Inf) at position(s): 30".
+
+3.7  Too few points / empty input  (new; from peer review)
+    fit_arpls(signal = c(1, 2))
+    StatARPLSResult(signal = numeric(0), wavenumber = numeric(0),
+      baseline = numeric(0), corrected = numeric(0),
+      residual_variance = NA_real_,
+      stability_bounds = matrix(numeric(0), 0, 2), lambda = 100,
+      n_iter = 1L, converged = TRUE, call = quote(f()))
+    Expected: both error with "... must have at least 3 points". Empty
+    and very short results are not valid objects.
+
+3.8  Noise-free flat spectrum      (new; from peer review)
+    fit_arpls(rep(5, 50), 1:50, lambda = 1e4)
+    Expected: no error; converged = TRUE; baseline equal to about 5.
+
+3.9  Wavenumber axis               (new)
+    fit_arpls(rnorm(50), wavenumber = 50:1)         # descending
+    Expected: error saying the axis must be strictly increasing, with a
+    suggestion to sort and interpolate (stats::approx()).
+    fit_arpls(rnorm(50), wavenumber = c(1:25, 27:51))  # uneven spacing
+    Expected: a warning about uneven spacing, not an error.
+
+3.10 compare() with a non-fit      (new; from peer review)
+    compare(fit, "not_a_fit")
+    Expected: error saying all objects passed via ... must be of class
+    StatARPLSResult (no silently dropped row, no mislabelled table).
+
+3.11 predict() out-of-range, both methods   (new; from peer review)
+    below <- min(fit$wavenumber) - 1
+    predict(fit, below, method = "linear", rule = 2)
+    predict(fit, below, method = "spline", rule = 2)
+    Expected: both return the first baseline value (fit$baseline[1]).
+    predict(fit, below, method = "linear", rule = 1)  -> NA
+    predict(fit, below, method = "spline", rule = 1)  -> NA plus a warning.
+
+3.12 Smallest-lambda warning       (new)
+    gcv_select_lambda() warns when the selected lambda is the smallest
+    value in lambda_grid, because GCV can under-smooth reweighted fits.
+    This is exercised by the automated suite (test-noise-and-axis.R).
+    It is NOT reliably reproducible by hand on a smooth synthetic
+    spectrum, where GCV tends to prefer large lambda, so a reviewer who
+    does not see the warning on the quick example above has not found a
+    bug. (It fired on two of four real textile spectra during the
+    author's testing; see Section 6.)
+
+
+============================================================
+4. TEST SUITE COVERAGE (for reference)
+============================================================
+
+The suite uses testthat edition 3, with shared synthetic-spectrum
+helpers. Files and what they cover:
+
+  test-constructors.R          StatARPLSResult(), validation
+  test-fit-arpls.R             fit_arpls() including edge cases
+  test-methods.R               print(), summary(), plot()
+  test-predict.R               predict()
+  test-predict-spline-rule.R   regression tests for spline + rule = 2
+  test-compare.R               compare() and its error handling
+  test-parameter-selection.R   GCV selection and the bootstrap
+  test-noise-and-axis.R        noise-residual definition, band centring,
+                               wavenumber validation, lower-edge warning
+  test-scaffold.R              package scaffold checks
+
+Coverage gaps the reviewer originally identified (predict, compare, and
+fit_arpls edge behaviour) are now covered.
+
+
+============================================================
+5. RESPONSE TO PEER REVIEW FEEDBACK
+============================================================
+
+Status key: FIXED = changed and tested; CLARIFIED = plan wording
+changed; DEFERRED = acknowledged, not changed (reason given).
+
+ #  Finding                                         Status     Action
+ -- ----------------------------------------------- ---------- ------------------------------------------
+ 1  Dependency versions not specified; "remotes"    CLARIFIED  Section 1 now lists remotes and devtools,
+    is required.                                               a C++ toolchain, and asks reviewers to
+                                                               record versions.
+ 2  Unclear whether commands go in console or       CLARIFIED  Every command is marked [R] or [shell];
+    terminal (setwd failed in bash).                           the clone step uses "cd" in the shell.
+ 3  Expected test count (8) did not match (21).     CLARIFIED  Count updated; the plan says to report
+                                                               the exact output if it differs.
+ 4  R CMD check: non-portable file name             FIXED      The plan file is renamed to a portable
+    "Peer Assessment Plan"; top-level non-standard             name and excluded from the build with an
+    files.                                                     anchored .Rbuildignore entry.
+ 5  R CMD check: undocumented arguments in          FIXED      Rd files regenerated with
+    fit_arpls.Rd; Rd usage line wider than 90                  devtools::document(); current check is
+    characters.                                                0 errors | 0 warnings | 0 notes.
+ 6  R CMD check note: vignette dependency           FIXED      Vignette added to the package build and
+    "knitr" without vignettes.                                 knitr declared; check is clean.
+ 7  Legend still lists "Stability band" when        FIXED      The legend now lists only the series that
+    show_band = FALSE.                                         are drawn (tested).
+ 8  predict(method = "spline", rule = 2) ignored    FIXED      Out-of-range points are clamped to the
+    rule and extrapolated with no warning.                     fitted range under rule = 2, matching the
+                                                               linear method. New tests in
+                                                               test-predict-spline-rule.R.
+ 9  compare() silently dropped a non-fit            FIXED      compare() now stops with an error naming
+    argument and mislabelled the table.                        the offending argument position (tested).
+10  fit_arpls() crashed on NA signal values.        FIXED      Explicit check for non-finite values with
+                                                               the positions reported.
+11  fit_arpls() crashed on a noise-free flat        FIXED      The weight update returns unit weights when
+    spectrum (no negative residuals).                          there are fewer than two negative residuals
+                                                               or no spread; the fit converges (tested).
+12  Non-numeric signal gave a low-level error       FIXED      Explicit numeric check with a clear message.
+    (known gap in the first plan).
+13  StatARPLSResult() accepted n = 0 and negative   FIXED      A result must have at least 3 observations;
+    sizes silently.                                            empty input is rejected with a clear
+                                                               message.
+14  No README.                                      FIXED      README added with install steps, a
+                                                               minimal example and the known limitations.
+15  Test coverage gaps: predict(), compare(),       FIXED      Dedicated test files added (Section 4).
+    fit_arpls() edge behaviour.
+16  Hard-coded defaults in fit_arpls()              DEFERRED   Defaults are documented and every one is
+    (lambda = 1e5, ratio = 0.05, ...).                         user-adjustable. gcv_select_lambda() is
+                                                               the recommended route when lambda is
+                                                               unknown.
+17  "Plan for compiled C++ implementation".         FIXED      The compiled engine is now part of the
+                                                               package (src/arpls_solver.cpp).
+
+
+============================================================
+6. KNOWN LIMITATIONS (disclosed, not hidden)
+============================================================
+
+ - GCV can pick the smallest lambda in the grid on some real spectra, so
+   the baseline follows the peaks. The package warns when this happens.
+   Inspect plot() and consider a larger minimum lambda, for example
+   lambda_grid = 10^seq(4, 9, length.out = 11).
+ - The stability band measures sampling stability at a fixed lambda, not
+   bias. A thin band does not prove the baseline is correct.
+ - ARPLS can absorb very broad peaks into the baseline (a known property
+   of the algorithm).
+ - The linear solve is dense, so spectra with several thousand points are
+   slow (automatic lambda selection at about 1,900 points takes a couple
+   of seconds; the bootstrap takes longer). A sparse/banded solver is
+   future work.
+
+============================================================
+END OF DOCUMENT
+============================================================

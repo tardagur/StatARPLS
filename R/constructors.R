@@ -16,7 +16,7 @@
 #' @param corrected A numeric vector of the same length as `signal`, giving
 #'   the baseline-corrected signal (`signal - baseline`).
 #' @param residual_variance A single numeric value giving the estimated
-#'   variance of the corrected residuals.
+#'   variance of the baseline-classified (noise) residuals, i.e. points whose final ARPLS weight exceeds 0.5.
 #' @param stability_bounds A numeric matrix with `length(signal)` rows and
 #'   exactly 2 columns (`lower`, `upper`), giving bootstrap-derived pointwise
 #'   stability bounds on the fitted baseline.
@@ -82,6 +82,7 @@ new_StatARPLSResult <- function(signal,
 #'
 #' @return The input `x`, invisibly, if all checks pass. Throws an
 #' informative error via `stop()` on the first violated invariant:
+#' * `signal` has at least 3 points
 #' * length consistency across `signal`, `wavenumber`, `baseline`,
 #'   `corrected`
 #' * `stability_bounds` has exactly 2 columns and `length(signal)` rows
@@ -92,6 +93,14 @@ new_StatARPLSResult <- function(signal,
 #' @noRd
 validate_StatARPLSResult <- function(x) {
   n <- length(x$signal)
+
+  if (n < 3) {
+    stop(
+      "`signal` must have at least 3 points; a StatARPLSResult cannot ",
+      "represent a second-order ARPLS fit on fewer observations. Got ", n, ".",
+      call. = FALSE
+    )
+  }
 
   if (length(x$wavenumber) != n || length(x$baseline) != n ||
       length(x$corrected) != n) {
@@ -145,7 +154,7 @@ validate_StatARPLSResult <- function(x) {
 #' @param corrected A numeric vector of the same length as `signal`, giving
 #'   the baseline-corrected signal.
 #' @param residual_variance A single numeric value giving the estimated
-#'   variance of the corrected residuals.
+#'   variance of the baseline-classified (noise) residuals, i.e. points whose final ARPLS weight exceeds 0.5.
 #' @param stability_bounds A numeric matrix with `length(signal)` rows and
 #'   2 columns (`lower`, `upper`), giving bootstrap stability bounds.
 #' @param lambda A single positive numeric value giving the optimal

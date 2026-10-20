@@ -19,9 +19,13 @@ to \code{stats::spline()} for smooth cubic interpolation).}
 \item{rule}{A single integer, \code{1} or \code{2}, controlling behaviour for
 \code{newdata} points outside the fitted wavenumber range. \code{1} (the
 default) returns \code{NA} for out-of-range points; \code{2} extends the
-boundary value as a constant. Passed through to \code{stats::approx()};
-ignored (with a warning) for \code{method = "spline"}, which always
-extrapolates.}
+boundary value as a constant. Honoured by both methods: for
+\code{method = "linear"} it is passed to \code{stats::approx()}, and for
+\code{method = "spline"} out-of-range points are clamped to the fitted
+range before interpolation, so \code{rule = 2} returns the boundary
+baseline value rather than a cubic extrapolation. Under
+\code{method = "spline"}, \code{rule = 1} also raises a warning that
+extrapolation is unsupported.}
 
 \item{...}{Additional arguments passed to or from other methods; unused
 here and retained only for S3 signature compatibility with

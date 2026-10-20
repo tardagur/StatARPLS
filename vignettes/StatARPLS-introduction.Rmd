@@ -1,0 +1,358 @@
+---
+title: "Introduction to StatARPLS: Statistical Baseline Correction"
+author: "Taruna Dagur"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to StatARPLS: Statistical Baseline Correction}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.5
+)
+```
+
+## Introduction
+
+A raw spectrum (FTIR, Raman, UV-Vis) is the sum of two components: a slowly
+varying background, called the **baseline**, and the **peaks** that carry the
+signal of interest. Before peaks can be detected or quantified, the baseline
+has to be estimated and subtracted. Because the true baseline is never
+observed, this is a statistical estimation problem.
+
+StatARPLS estimates the baseline with Asymmetrically Reweighted Penalized
+Least Squares (ARPLS). It provides:
+
+* a baseline fit for a smoothing parameter you choose (`fit_arpls()`);
+* automatic selection of that parameter by generalised cross-validation
+  (`gcv_select_lambda()`);
+* a stability band around the baseline from a moving block residual bootstrap
+  (`bootstrap_baseline_uncertainty()`);
+* one result object, of class `StatARPLSResult`, with `print()`, `summary()`,
+  `plot()`, `predict()` and `compare()` methods.
+
+| Task | Function |
+|---|---|
+| Fit a baseline with a `lambda` you choose | `fit_arpls()` |
+| Choose `lambda` automatically | `gcv_select_lambda()` |
+| Add a bootstrap stability band | `bootstrap_baseline_uncertainty()` |
+| Inspect a result | `print()`, `summary()`, `plot()` |
+| Evaluate the baseline on another axis | `predict()` |
+| Put several fits side by side | `compare()` |
+
+```{r setup}
+library(StatARPLS)
+```
+
+## Input requirements
+
+* `signal` is a numeric vector with at least 3 finite values (no `NA`,
+  `NaN` or `Inf`).
+* `wavenumber` is a numeric vector of the same length as `signal`. It must be
+  finite and **strictly increasing**. If you omit it, `seq_along(signal)` is
+  used.
+* Repeated or descending values (for example an axis stored from high to low,
+  or overlapping scan segments) raise an error. Sort `signal` and
+  `wavenumber` together with `order(wavenumber)`, and put repeated values onto
+  a regular grid with `stats::approx()`.
+* Unevenly spaced axes raise a warning, because the second-order penalty
+  assumes equal spacing.
+* Peaks must point **up**. For transmission data, convert to absorbance first
+  (for example `-log10(transmittance / 100)` for percent transmittance).
+
+## How the method works
+
+### The ARPLS objective
+
+Let $\mathbf{y}$ be the observed spectrum (length $n$) and $\mathbf{z}$ the
+unknown baseline. ARPLS chooses $\mathbf{z}$ to minimise a penalised weighted
+least squares objective with two competing terms:
+
+* a **fidelity term**, which pulls $\mathbf{z}$ toward $\mathbf{y}$, weighted
+  pointwise by $\mathbf{w}$;
+* a **roughness penalty**, which discourages the baseline from following sharp
+  structure, controlled by $\lambda$ and the second-order difference operator
+  $\mathbf{D}$.
+
+$$
+\sum_i w_i (y_i - z_i)^2 \;+\; \lambda \sum_j \left(\mathbf{D}\mathbf{z}\right)_j^2
+$$
+
+Larger $\lambda$ gives a smoother baseline. Smaller $\lambda$ lets the
+baseline follow finer structure, at the risk of absorbing real peaks. For fixed
+weights the minimiser solves the linear system
+
+$$
+\left(\mathbf{W} + \lambda \, \mathbf{D}^{\top} \mathbf{D}\right)\mathbf{z}
+  = \mathbf{W}\mathbf{y}
+$$
+
+where $\mathbf{W}$ is the diagonal matrix of the weights. The system is solved
+densely at each iteration by a compiled Rcpp/RcppArmadillo routine, so run time
+grows quickly with the number of points; see "Practical notes".
+
+### Asymmetric reweighting
+
+The weights are updated at each iteration from the residuals
+$r_i = y_i - z_i$. Points below the current baseline are treated as baseline
+noise; points above it are treated as likely peak signal and are down-weighted.
+With $m$ and $s$ the mean and standard deviation of the *negative* residuals,
+
+$$
+w_i = \frac{1}{1 + \exp\!\left(\dfrac{2\left(r_i - (2s - m)\right)}{s}\right)}
+$$
+
+Weights are close to 1 for baseline points and close to 0 for peak points.
+The loop stops when the relative change in the weights falls below `ratio`, or
+after `max_iter` iterations.
+
+## Fitting with a fixed `lambda`
+
+`fit_arpls()` is the basic fit. Its arguments are:
+
+| Argument | Meaning | Default |
+|---|---|---|
+| `signal` | intensities | required |
+| `wavenumber` | strictly increasing axis | `seq_along(signal)` |
+| `lambda` | smoothing strength; larger is smoother | `1e5` |
+| `ratio` | convergence threshold on the change in weights | `0.05` |
+| `max_iter` | maximum number of reweighting iterations | `50` |
+| `ridge` | small value added to the diagonal for numerical stability | `1e-6` |
+
+It returns a `StatARPLSResult`, a list with these fields:
+
+| Field | Contents |
+|---|---|
+| `signal`, `wavenumber` | the inputs |
+| `baseline` | the fitted baseline |
+| `corrected` | `signal - baseline` |
+| `residual_variance` | variance of the points classified as baseline (noise) |
+| `stability_bounds` | two-column matrix (lower, upper) of the band |
+| `lambda` | the smoothing parameter used |
+| `n_iter`, `converged` | iterations used and whether the weights settled |
+| `call` | the call that produced the fit |
+
+Until you run the bootstrap, `stability_bounds` holds a provisional
+$\pm 1.96$ standard-deviation band based on `residual_variance`.
+
+## Automatic `lambda` selection
+
+`gcv_select_lambda()` evaluates a grid of candidate values (`lambda_grid`,
+by default `10^seq(2, 8, length.out = 13)`) and returns the fit with the lowest
+generalised cross-validation (GCV) score,
+
+$$
+\mathrm{GCV}(\lambda) = \frac{n \sum_i w_i r_i^2}{\left(n - \mathrm{tr}\,\mathbf{H}_\lambda\right)^2},
+$$
+
+where $\mathrm{tr}\,\mathbf{H}_\lambda$ is the effective degrees of freedom of
+the fit. Forming the hat matrix explicitly would be too expensive for every
+grid point, so the trace is estimated with Hutchinson's stochastic estimator:
+`n_probe` random vectors (default 30) are pushed through the same linear solve
+used for fitting. Use `seed` for reproducible results.
+
+The GCV trace is stored on the result and can be read with
+`attr(fit, "gcv")`, which holds `lambda_grid`, `gcv_scores`, `lambda_optimal`
+and `df_effective`.
+
+**A caveat.** GCV rewards close fits to the data, and a reweighted fit can
+therefore score best at a very small `lambda`, whose baseline simply follows
+the peaks. `gcv_select_lambda()` warns when the selected value is the smallest
+one in `lambda_grid`. If you see that warning, check `plot()` and rerun with a
+larger minimum, for example `lambda_grid = 10^seq(4, 9, length.out = 11)`. The
+warning is a diagnostic, not a correction, so inspect the plot for every new
+type of spectrum.
+
+## Uncertainty: the bootstrap stability band
+
+A fitted baseline is a point estimate.
+`bootstrap_baseline_uncertainty(fit, B, block_length, seed)` shows how much it
+moves when the noise is resampled. It uses a **moving block bootstrap** on the
+residuals: overlapping blocks of neighbouring residuals are drawn with
+replacement and joined into a pseudo-residual series, which is added to the
+fitted baseline. The baseline is refitted to each pseudo-signal, and the
+pointwise 2.5% and 97.5% percentiles of the refits give the band. Blocks are
+used because spectral residuals are usually serially correlated, and
+resampling points independently would understate the variability.
+
+* `B` is the number of replicates (default 200).
+* `block_length` defaults to `max(2, round(n^(1/3)))`, clamped for short
+  spectra. Supply it yourself if you know the autocorrelation length from the
+  instrument resolution.
+* `lambda` is held fixed across replicates, so the band describes variability
+  *given* the chosen smoothing, not uncertainty about `lambda` itself.
+* Replicates that fail to converge are discarded and counted
+  (`attr(fit, "bootstrap")$n_failed`).
+* Only residuals at points classified as baseline (final weight above 0.5) are
+  resampled, and the same definition sets `residual_variance`. Otherwise the
+  peaks would be injected into every pseudo-signal.
+* The band is centred on the fitted baseline. It measures **sampling
+  stability** at the chosen `lambda`; it does not include the method's own
+  bias, so it can be narrow compared with the real error.
+
+## Worked example
+
+The example simulates a spectrum with a curved baseline and two peaks, then
+runs the full workflow.
+
+```{r simulate-data}
+set.seed(501)
+
+wavenumber <- seq(0, 2000, length.out = 500)
+
+true_baseline <- 50 + 0.02 * wavenumber + 30 * sin(wavenumber / 400)
+
+peak_signal <- 80 * exp(-((wavenumber - 700)^2) / (2 * 25^2)) +
+  60 * exp(-((wavenumber - 1300)^2) / (2 * 40^2))
+
+noise <- rnorm(length(wavenumber), mean = 0, sd = 1.5)
+
+raw_signal <- true_baseline + peak_signal + noise
+```
+
+### Step 1: a fixed-`lambda` fit
+
+```{r fixed-fit}
+fixed_fit <- fit_arpls(
+  signal     = raw_signal,
+  wavenumber = wavenumber,
+  lambda     = 1e5
+)
+
+fixed_fit
+```
+
+### Step 2: automatic selection
+
+```{r gcv-fit}
+gcv_fit <- gcv_select_lambda(
+  signal     = raw_signal,
+  wavenumber = wavenumber,
+  seed       = 501
+)
+
+gcv_fit
+```
+
+The grid search is kept on the object:
+
+```{r gcv-diagnostics}
+gcv_diagnostics <- attr(gcv_fit, "gcv")
+
+data.frame(
+  lambda    = gcv_diagnostics$lambda_grid,
+  gcv_score = gcv_diagnostics$gcv_scores
+)
+```
+
+### Step 3: the bootstrap band
+
+This example uses `B = 100` to keep the build fast; use the default
+`B = 200` or more for an analysis.
+
+```{r bootstrap-fit}
+final_fit <- bootstrap_baseline_uncertainty(
+  fit  = gcv_fit,
+  B    = 100,
+  seed = 501
+)
+
+final_fit
+```
+
+The block length actually used is recorded with the other bootstrap
+diagnostics:
+
+```{r bootstrap-block-length}
+attr(final_fit, "bootstrap")$block_length
+```
+
+### Step 4: inspect the result
+
+```{r summary-output}
+summary(final_fit)
+```
+
+`summary()` reports the selected `lambda`, convergence, the residual variance,
+the mean width of the stability band, quantiles of the corrected signal, and
+(when present) the GCV and bootstrap diagnostics: the number of candidates,
+the effective degrees of freedom, the replicates requested, converged and
+failed, and the mean pointwise standard error.
+
+`plot()` overlays the raw signal, the baseline and the band using base
+graphics. Set `show_band = FALSE` to hide the band and its legend entry, and
+pass further graphical arguments such as `main` or `xlab` through `...`.
+
+```{r plot-output}
+plot(
+  final_fit,
+  main = "ARPLS baseline with bootstrap stability band"
+)
+```
+
+The corrected spectrum, ready for peak analysis, is `final_fit$corrected`.
+
+### Step 5: evaluate the baseline on a new axis
+
+`predict()` interpolates the fitted baseline onto new wavenumbers, with
+`method = "linear"` (the default) or `method = "spline"`. The `rule` argument
+controls points outside the fitted range for both methods: `rule = 1` (the
+default) returns `NA`, and `rule = 2` returns the nearest boundary value.
+With `method = "spline"`, `rule = 1` also warns that extrapolation is not
+supported.
+
+```{r predict-output}
+new_grid <- seq(100, 1900, by = 250)
+
+predict(final_fit, newdata = new_grid)
+```
+
+### Step 6: compare fits
+
+`compare()` puts two or more `StatARPLSResult` objects side by side. Its
+columns are the label, `lambda`, the effective degrees of freedom
+(`df_effective`, `NA` for fits that were not chosen by GCV), the number of
+iterations, the convergence flag, and the mean width of the band.
+
+Compare fits that carry the same kind of band. Here both fits have the
+provisional band, so the widths are comparable; a bootstrapped fit has a
+different band, usually narrower.
+
+```{r compare-output}
+low_lambda_fit <- fit_arpls(
+  signal     = raw_signal,
+  wavenumber = wavenumber,
+  lambda     = 500
+)
+
+compare(gcv_fit, low_lambda_fit, labels = c("GCV-selected", "Low lambda"))
+```
+
+## Practical notes
+
+* **Run time.** The linear solve is dense, so cost grows quickly with the
+  number of points: a spectrum of a few hundred points fits in milliseconds,
+  but automatic selection and the bootstrap on spectra with several thousand
+  points can take many seconds to minutes. Thinning an over-sampled spectrum
+  (for example keeping every second point) is a simple way to cut the time.
+* **Reproducibility.** `gcv_select_lambda()` and
+  `bootstrap_baseline_uncertainty()` take a `seed`; the caller's random-number
+  state is restored on exit.
+* **Check the plot.** Look at `plot()` for every new type of spectrum. Very
+  broad peaks can be absorbed into the baseline, which is a property of the
+  ARPLS method, and a thin band does not mean the baseline is correct.
+
+## Summary
+
+StatARPLS fits ARPLS baselines (`fit_arpls()`), can choose the smoothing
+parameter by generalised cross-validation (`gcv_select_lambda()`), and can
+attach a moving-block-bootstrap stability band
+(`bootstrap_baseline_uncertainty()`). Every stage returns the same
+`StatARPLSResult` object, which you can print, summarise, plot, use for
+prediction on a new axis, and compare with other fits.

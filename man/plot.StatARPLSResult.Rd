@@ -11,10 +11,13 @@
 
 \item{show_band}{A single logical value; if \code{TRUE} (the default), the
 bootstrap stability band from \code{x$stability_bounds} is drawn as a
-shaded polygon beneath the baseline.}
+shaded polygon beneath the baseline, and included in the legend. If
+\code{FALSE}, the band is neither drawn nor listed in the legend.}
 
 \item{...}{Additional arguments passed through to the underlying
-\code{graphics::plot()} call (e.g. \code{main}, \code{xlab}, \code{col}).}
+\code{graphics::plot()} call (e.g. \code{main}, \code{xlab}, \code{ylab}, \code{col}, \code{ylim}).
+Any of these supplied here override this method's own defaults rather
+than conflicting with them.}
 }
 \value{
 \code{NULL}, invisibly. Called for its side effect of drawing to the
@@ -23,12 +26,15 @@ active graphics device:
 \item raw signal as a line trace
 \item fitted baseline overlaid in a contrasting colour
 \item optional shaded stability band (\code{show_band = TRUE})
-\item legend identifying each series
+\item legend identifying each series actually drawn
 }
 }
 \description{
 Produces a base R graphics overlay showing the raw signal, the fitted
 ARPLS baseline, and the bootstrap stability band, on a single plotting
 surface. No third-party plotting engine is used; this method depends
-only on the \code{graphics} package already declared in \code{Imports}.
+only on the \code{graphics} and \code{grDevices} packages already declared in
+\code{Imports}. The plotting region's y-axis is sized to accommodate the
+signal, the baseline, and (when drawn) the stability band, so the band
+is never clipped off the visible plot.
 }

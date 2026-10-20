@@ -23,3 +23,14 @@ test_that("fit_arpls produces a structurally valid object on mock spectral data"
     "wavenumber` must be the same length as `signal"
   )
 })
+
+test_that("compiled arpls_engine() matches the pure-R reference implementation", {
+  spec <- make_synthetic_spectrum()
+
+  compiled  <- arpls_engine(spec$signal, 1e5, 0.05, 50L, 1e-6)
+  reference <- arpls_engine_r(spec$signal, 1e5, 0.05, 50L, 1e-6)
+
+  expect_equal(compiled$baseline, reference$baseline, tolerance = 1e-5)
+  expect_equal(compiled$n_iter, reference$n_iter)
+  expect_equal(compiled$converged, reference$converged)
+})

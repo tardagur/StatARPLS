@@ -15,3 +15,8 @@
 ^\.github$
 ^\.github/.*$
 ^LICENSE\.md$
+^doc$
+^Meta$
+^data-raw$
+^presentation$
+^PEER_ASSESSMENT_PLAN\.txt$

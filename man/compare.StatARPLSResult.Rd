@@ -11,7 +11,11 @@
 of the comparison table.}
 
 \item{...}{One or more additional objects of class \code{StatARPLSResult}
-to compare against \code{x}. Objects of any other class trigger an error.}
+to compare against \code{x}. Every object passed here must be a
+\code{StatARPLSResult}; any other class triggers an error rather than
+being silently dropped, since a dropped object would otherwise shift
+the automatic row labels out of alignment with the fits they
+describe.}
 
 \item{labels}{An optional character vector of row labels, the same
 length as the total number of objects being compared (\code{x} plus all
