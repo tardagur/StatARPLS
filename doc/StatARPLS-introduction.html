@@ -10,9 +10,11 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
+<meta name="author" content="Taruna Dagur" />
 
+<meta name="date" content="2026-10-21" />
 
-<title>README.knit</title>
+<title>Introduction to StatARPLS: Statistical Baseline Correction</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -337,44 +339,513 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 
 
+<h1 class="title toc-ignore">Introduction to StatARPLS: Statistical
+Baseline Correction</h1>
+<h4 class="author">Taruna Dagur</h4>
+<h4 class="date">2026-10-21</h4>
 
 
 
-<!-- README.md is generated from README.Rmd. Please edit that file -->
-<div id="statarpls" class="section level1">
-<h1>StatARPLS</h1>
-<!-- badges: start -->
-<!-- badges: end -->
-<p>The goal of StatARPLS is to …</p>
-<div id="installation" class="section level2">
-<h2>Installation</h2>
-<p>You can install the development version of StatARPLS like so:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># FILL THIS IN! HOW CAN PEOPLE INSTALL YOUR DEV PACKAGE?</span></span></code></pre></div>
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<p>A raw spectrum (FTIR, Raman, UV-Vis) is the sum of two components: a
+slowly varying background, called the <strong>baseline</strong>, and the
+<strong>peaks</strong> that carry the signal of interest. Before peaks
+can be detected or quantified, the baseline has to be estimated and
+subtracted. Because the true baseline is never observed, this is a
+statistical estimation problem.</p>
+<p>StatARPLS estimates the baseline with Asymmetrically Reweighted
+Penalized Least Squares (ARPLS). It provides:</p>
+<ul>
+<li>a baseline fit for a smoothing parameter you choose
+(<code>fit_arpls()</code>);</li>
+<li>automatic selection of that parameter by generalised
+cross-validation (<code>gcv_select_lambda()</code>);</li>
+<li>a stability band around the baseline from a moving block residual
+bootstrap (<code>bootstrap_baseline_uncertainty()</code>);</li>
+<li>one result object, of class <code>StatARPLSResult</code>, with
+<code>print()</code>, <code>summary()</code>, <code>plot()</code>,
+<code>predict()</code> and <code>compare()</code> methods.</li>
+</ul>
+<table>
+<thead>
+<tr class="header">
+<th>Task</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Fit a baseline with a <code>lambda</code> you choose</td>
+<td><code>fit_arpls()</code></td>
+</tr>
+<tr class="even">
+<td>Choose <code>lambda</code> automatically</td>
+<td><code>gcv_select_lambda()</code></td>
+</tr>
+<tr class="odd">
+<td>Add a bootstrap stability band</td>
+<td><code>bootstrap_baseline_uncertainty()</code></td>
+</tr>
+<tr class="even">
+<td>Inspect a result</td>
+<td><code>print()</code>, <code>summary()</code>,
+<code>plot()</code></td>
+</tr>
+<tr class="odd">
+<td>Evaluate the baseline on another axis</td>
+<td><code>predict()</code></td>
+</tr>
+<tr class="even">
+<td>Put several fits side by side</td>
+<td><code>compare()</code></td>
+</tr>
+</tbody>
+</table>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(StatARPLS)</span></code></pre></div>
 </div>
-<div id="example" class="section level2">
-<h2>Example</h2>
-<p>This is a basic example which shows you how to solve a common
-problem:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">library</span>(StatARPLS)</span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="do">## basic example code</span></span></code></pre></div>
-<p>What is special about using <code>README.Rmd</code> instead of just
-<code>README.md</code>? You can include R chunks like so:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">summary</span>(cars)</span>
-<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="co">#&gt;      speed           dist       </span></span>
-<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="co">#&gt;  Min.   : 4.0   Min.   :  2.00  </span></span>
-<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="co">#&gt;  1st Qu.:12.0   1st Qu.: 26.00  </span></span>
-<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="co">#&gt;  Median :15.0   Median : 36.00  </span></span>
-<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a><span class="co">#&gt;  Mean   :15.4   Mean   : 42.98  </span></span>
-<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a><span class="co">#&gt;  3rd Qu.:19.0   3rd Qu.: 56.00  </span></span>
-<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a><span class="co">#&gt;  Max.   :25.0   Max.   :120.00</span></span></code></pre></div>
-<p>You’ll still need to render <code>README.Rmd</code> regularly, to
-keep <code>README.md</code> up-to-date.
-<code>devtools::build_readme()</code> is handy for this.</p>
-<p>You can also embed plots, for example:</p>
-<p><img role="img" aria-label src="data:image/png;base64,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" alt width="100%" /></p>
-<p>In that case, don’t forget to commit and push the resulting figure
-files, so they display on GitHub and CRAN.</p>
+<div id="input-requirements" class="section level2">
+<h2>Input requirements</h2>
+<ul>
+<li><code>signal</code> is a numeric vector with at least 3 finite
+values (no <code>NA</code>, <code>NaN</code> or <code>Inf</code>).</li>
+<li><code>wavenumber</code> is a numeric vector of the same length as
+<code>signal</code>. It must be finite and <strong>strictly
+increasing</strong>. If you omit it, <code>seq_along(signal)</code> is
+used.</li>
+<li>Repeated or descending values (for example an axis stored from high
+to low, or overlapping scan segments) raise an error. Sort
+<code>signal</code> and <code>wavenumber</code> together with
+<code>order(wavenumber)</code>, and put repeated values onto a regular
+grid with <code>stats::approx()</code>.</li>
+<li>Unevenly spaced axes raise a warning, because the second-order
+penalty assumes equal spacing.</li>
+<li>Peaks must point <strong>up</strong>. For transmission data, convert
+to absorbance first (for example
+<code>-log10(transmittance / 100)</code> for percent
+transmittance).</li>
+</ul>
 </div>
+<div id="how-the-method-works" class="section level2">
+<h2>How the method works</h2>
+<div id="the-arpls-objective" class="section level3">
+<h3>The ARPLS objective</h3>
+<p>Let <span class="math inline">\(\mathbf{y}\)</span> be the observed
+spectrum (length <span class="math inline">\(n\)</span>) and <span class="math inline">\(\mathbf{z}\)</span> the unknown baseline. ARPLS
+chooses <span class="math inline">\(\mathbf{z}\)</span> to minimise a
+penalised weighted least squares objective with two competing terms:</p>
+<ul>
+<li>a <strong>fidelity term</strong>, which pulls <span class="math inline">\(\mathbf{z}\)</span> toward <span class="math inline">\(\mathbf{y}\)</span>, weighted pointwise by <span class="math inline">\(\mathbf{w}\)</span>;</li>
+<li>a <strong>roughness penalty</strong>, which discourages the baseline
+from following sharp structure, controlled by <span class="math inline">\(\lambda\)</span> and the second-order difference
+operator <span class="math inline">\(\mathbf{D}\)</span>.</li>
+</ul>
+<p><span class="math display">\[
+\sum_i w_i (y_i - z_i)^2 \;+\; \lambda \sum_j
+\left(\mathbf{D}\mathbf{z}\right)_j^2
+\]</span></p>
+<p>Larger <span class="math inline">\(\lambda\)</span> gives a smoother
+baseline. Smaller <span class="math inline">\(\lambda\)</span> lets the
+baseline follow finer structure, at the risk of absorbing real peaks.
+For fixed weights the minimiser solves the linear system</p>
+<p><span class="math display">\[
+\left(\mathbf{W} + \lambda \, \mathbf{D}^{\top}
+\mathbf{D}\right)\mathbf{z}
+  = \mathbf{W}\mathbf{y}
+\]</span></p>
+<p>where <span class="math inline">\(\mathbf{W}\)</span> is the diagonal
+matrix of the weights. The system is solved densely at each iteration by
+a compiled Rcpp/RcppArmadillo routine, so run time grows quickly with
+the number of points; see “Practical notes”.</p>
+</div>
+<div id="asymmetric-reweighting" class="section level3">
+<h3>Asymmetric reweighting</h3>
+<p>The weights are updated at each iteration from the residuals <span class="math inline">\(r_i = y_i - z_i\)</span>. Points below the current
+baseline are treated as baseline noise; points above it are treated as
+likely peak signal and are down-weighted. With <span class="math inline">\(m\)</span> and <span class="math inline">\(s\)</span> the mean and standard deviation of the
+<em>negative</em> residuals,</p>
+<p><span class="math display">\[
+w_i = \frac{1}{1 + \exp\!\left(\dfrac{2\left(r_i - (2s -
+m)\right)}{s}\right)}
+\]</span></p>
+<p>Weights are close to 1 for baseline points and close to 0 for peak
+points. The loop stops when the relative change in the weights falls
+below <code>ratio</code>, or after <code>max_iter</code> iterations.</p>
+</div>
+</div>
+<div id="fitting-with-a-fixed-lambda" class="section level2">
+<h2>Fitting with a fixed <code>lambda</code></h2>
+<p><code>fit_arpls()</code> is the basic fit. Its arguments are:</p>
+<table>
+<colgroup>
+<col width="33%" />
+<col width="33%" />
+<col width="33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Argument</th>
+<th>Meaning</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>signal</code></td>
+<td>intensities</td>
+<td>required</td>
+</tr>
+<tr class="even">
+<td><code>wavenumber</code></td>
+<td>strictly increasing axis</td>
+<td><code>seq_along(signal)</code></td>
+</tr>
+<tr class="odd">
+<td><code>lambda</code></td>
+<td>smoothing strength; larger is smoother</td>
+<td><code>1e5</code></td>
+</tr>
+<tr class="even">
+<td><code>ratio</code></td>
+<td>convergence threshold on the change in weights</td>
+<td><code>0.05</code></td>
+</tr>
+<tr class="odd">
+<td><code>max_iter</code></td>
+<td>maximum number of reweighting iterations</td>
+<td><code>50</code></td>
+</tr>
+<tr class="even">
+<td><code>ridge</code></td>
+<td>small value added to the diagonal for numerical stability</td>
+<td><code>1e-6</code></td>
+</tr>
+</tbody>
+</table>
+<p>It returns a <code>StatARPLSResult</code>, a list with these
+fields:</p>
+<table>
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>signal</code>, <code>wavenumber</code></td>
+<td>the inputs</td>
+</tr>
+<tr class="even">
+<td><code>baseline</code></td>
+<td>the fitted baseline</td>
+</tr>
+<tr class="odd">
+<td><code>corrected</code></td>
+<td><code>signal - baseline</code></td>
+</tr>
+<tr class="even">
+<td><code>residual_variance</code></td>
+<td>variance of the points classified as baseline (noise)</td>
+</tr>
+<tr class="odd">
+<td><code>stability_bounds</code></td>
+<td>two-column matrix (lower, upper) of the band</td>
+</tr>
+<tr class="even">
+<td><code>lambda</code></td>
+<td>the smoothing parameter used</td>
+</tr>
+<tr class="odd">
+<td><code>n_iter</code>, <code>converged</code></td>
+<td>iterations used and whether the weights settled</td>
+</tr>
+<tr class="even">
+<td><code>call</code></td>
+<td>the call that produced the fit</td>
+</tr>
+</tbody>
+</table>
+<p>Until you run the bootstrap, <code>stability_bounds</code> holds a
+provisional <span class="math inline">\(\pm 1.96\)</span>
+standard-deviation band based on <code>residual_variance</code>.</p>
+</div>
+<div id="automatic-lambda-selection" class="section level2">
+<h2>Automatic <code>lambda</code> selection</h2>
+<p><code>gcv_select_lambda()</code> evaluates a grid of candidate values
+(<code>lambda_grid</code>, by default
+<code>10^seq(2, 8, length.out = 13)</code>) and returns the fit with the
+lowest generalised cross-validation (GCV) score,</p>
+<p><span class="math display">\[
+\mathrm{GCV}(\lambda) = \frac{n \sum_i w_i r_i^2}{\left(n -
+\mathrm{tr}\,\mathbf{H}_\lambda\right)^2},
+\]</span></p>
+<p>where <span class="math inline">\(\mathrm{tr}\,\mathbf{H}_\lambda\)</span> is the
+effective degrees of freedom of the fit. Forming the hat matrix
+explicitly would be too expensive for every grid point, so the trace is
+estimated with Hutchinson’s stochastic estimator: <code>n_probe</code>
+random vectors (default 30) are pushed through the same linear solve
+used for fitting. Use <code>seed</code> for reproducible results.</p>
+<p>The GCV trace is stored on the result and can be read with
+<code>attr(fit, &quot;gcv&quot;)</code>, which holds <code>lambda_grid</code>,
+<code>gcv_scores</code>, <code>lambda_optimal</code> and
+<code>df_effective</code>.</p>
+<p><strong>A caveat.</strong> GCV rewards close fits to the data, and a
+reweighted fit can therefore score best at a very small
+<code>lambda</code>, whose baseline simply follows the peaks.
+<code>gcv_select_lambda()</code> warns when the selected value is the
+smallest one in <code>lambda_grid</code>. If you see that warning, check
+<code>plot()</code> and rerun with a larger minimum, for example
+<code>lambda_grid = 10^seq(4, 9, length.out = 11)</code>. The warning is
+a diagnostic, not a correction, so inspect the plot for every new type
+of spectrum.</p>
+</div>
+<div id="uncertainty-the-bootstrap-stability-band" class="section level2">
+<h2>Uncertainty: the bootstrap stability band</h2>
+<p>A fitted baseline is a point estimate.
+<code>bootstrap_baseline_uncertainty(fit, B, block_length, seed)</code>
+shows how much it moves when the noise is resampled. It uses a
+<strong>moving block bootstrap</strong> on the residuals: overlapping
+blocks of neighbouring residuals are drawn with replacement and joined
+into a pseudo-residual series, which is added to the fitted baseline.
+The baseline is refitted to each pseudo-signal, and the pointwise 2.5%
+and 97.5% percentiles of the refits give the band. Blocks are used
+because spectral residuals are usually serially correlated, and
+resampling points independently would understate the variability.</p>
+<ul>
+<li><code>B</code> is the number of replicates (default 200).</li>
+<li><code>block_length</code> defaults to
+<code>max(2, round(n^(1/3)))</code>, clamped for short spectra. Supply
+it yourself if you know the autocorrelation length from the instrument
+resolution.</li>
+<li><code>lambda</code> is held fixed across replicates, so the band
+describes variability <em>given</em> the chosen smoothing, not
+uncertainty about <code>lambda</code> itself.</li>
+<li>Replicates that fail to converge are discarded and counted
+(<code>attr(fit, &quot;bootstrap&quot;)$n_failed</code>).</li>
+<li>Only residuals at points classified as baseline (final weight above
+0.5) are resampled, and the same definition sets
+<code>residual_variance</code>. Otherwise the peaks would be injected
+into every pseudo-signal.</li>
+<li>The band is centred on the fitted baseline. It measures
+<strong>sampling stability</strong> at the chosen <code>lambda</code>;
+it does not include the method’s own bias, so it can be narrow compared
+with the real error.</li>
+</ul>
+</div>
+<div id="worked-example" class="section level2">
+<h2>Worked example</h2>
+<p>The example simulates a spectrum with a curved baseline and two
+peaks, then runs the full workflow.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">501</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>wavenumber <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">2000</span>, <span class="at">length.out =</span> <span class="dv">500</span>)</span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>true_baseline <span class="ot">&lt;-</span> <span class="dv">50</span> <span class="sc">+</span> <span class="fl">0.02</span> <span class="sc">*</span> wavenumber <span class="sc">+</span> <span class="dv">30</span> <span class="sc">*</span> <span class="fu">sin</span>(wavenumber <span class="sc">/</span> <span class="dv">400</span>)</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>peak_signal <span class="ot">&lt;-</span> <span class="dv">80</span> <span class="sc">*</span> <span class="fu">exp</span>(<span class="sc">-</span>((wavenumber <span class="sc">-</span> <span class="dv">700</span>)<span class="sc">^</span><span class="dv">2</span>) <span class="sc">/</span> (<span class="dv">2</span> <span class="sc">*</span> <span class="dv">25</span><span class="sc">^</span><span class="dv">2</span>)) <span class="sc">+</span></span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>  <span class="dv">60</span> <span class="sc">*</span> <span class="fu">exp</span>(<span class="sc">-</span>((wavenumber <span class="sc">-</span> <span class="dv">1300</span>)<span class="sc">^</span><span class="dv">2</span>) <span class="sc">/</span> (<span class="dv">2</span> <span class="sc">*</span> <span class="dv">40</span><span class="sc">^</span><span class="dv">2</span>))</span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>noise <span class="ot">&lt;-</span> <span class="fu">rnorm</span>(<span class="fu">length</span>(wavenumber), <span class="at">mean =</span> <span class="dv">0</span>, <span class="at">sd =</span> <span class="fl">1.5</span>)</span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a>raw_signal <span class="ot">&lt;-</span> true_baseline <span class="sc">+</span> peak_signal <span class="sc">+</span> noise</span></code></pre></div>
+<div id="step-1-a-fixed-lambda-fit" class="section level3">
+<h3>Step 1: a fixed-<code>lambda</code> fit</h3>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>fixed_fit <span class="ot">&lt;-</span> <span class="fu">fit_arpls</span>(</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  <span class="at">signal     =</span> raw_signal,</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>  <span class="at">wavenumber =</span> wavenumber,</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>  <span class="at">lambda     =</span> <span class="fl">1e5</span></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>)</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a>fixed_fit</span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a><span class="co">#&gt; &lt;StatARPLSResult&gt;</span></span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="co">#&gt; Call: fit_arpls(signal = raw_signal, wavenumber = wavenumber, lambda = 1e+05) </span></span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a><span class="co">#&gt; Signal length:    500 </span></span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a><span class="co">#&gt; Converged:        TRUE in 4 iteration(s)</span></span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a><span class="co">#&gt; Lambda (optimal): 1e+05 </span></span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a><span class="co">#&gt; Residual variance: 1.907</span></span></code></pre></div>
+</div>
+<div id="step-2-automatic-selection" class="section level3">
+<h3>Step 2: automatic selection</h3>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>gcv_fit <span class="ot">&lt;-</span> <span class="fu">gcv_select_lambda</span>(</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  <span class="at">signal     =</span> raw_signal,</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="at">wavenumber =</span> wavenumber,</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="at">seed       =</span> <span class="dv">501</span></span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>)</span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>gcv_fit</span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="co">#&gt; &lt;StatARPLSResult&gt;</span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co">#&gt; Call: gcv_select_lambda(signal = raw_signal, wavenumber = wavenumber,      seed = 501) </span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="co">#&gt; Signal length:    500 </span></span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="co">#&gt; Converged:        TRUE in 4 iteration(s)</span></span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a><span class="co">#&gt; Lambda (optimal): 316228 </span></span>
+<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a><span class="co">#&gt; Residual variance: 1.969 </span></span>
+<span id="cb4-15"><a href="#cb4-15" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-16"><a href="#cb4-16" tabindex="-1"></a><span class="co">#&gt; GCV selection:  13 candidates evaluated, effective df = 8.686</span></span></code></pre></div>
+<p>The grid search is kept on the object:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>gcv_diagnostics <span class="ot">&lt;-</span> <span class="fu">attr</span>(gcv_fit, <span class="st">&quot;gcv&quot;</span>)</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="fu">data.frame</span>(</span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>  <span class="at">lambda    =</span> gcv_diagnostics<span class="sc">$</span>lambda_grid,</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>  <span class="at">gcv_score =</span> gcv_diagnostics<span class="sc">$</span>gcv_scores</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>)</span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="co">#&gt;          lambda gcv_score</span></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="co">#&gt; 1  1.000000e+02  2.908789</span></span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="co">#&gt; 2  3.162278e+02  4.815379</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="co">#&gt; 3  1.000000e+03  9.036161</span></span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="co">#&gt; 4  3.162278e+03 15.928537</span></span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a><span class="co">#&gt; 5  1.000000e+04 24.110057</span></span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a><span class="co">#&gt; 6  3.162278e+04  7.518485</span></span>
+<span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a><span class="co">#&gt; 7  1.000000e+05  1.615167</span></span>
+<span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a><span class="co">#&gt; 8  3.162278e+05  1.608241</span></span>
+<span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a><span class="co">#&gt; 9  1.000000e+06  1.804209</span></span>
+<span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a><span class="co">#&gt; 10 3.162278e+06  3.165642</span></span>
+<span id="cb5-18"><a href="#cb5-18" tabindex="-1"></a><span class="co">#&gt; 11 1.000000e+07  9.545988</span></span>
+<span id="cb5-19"><a href="#cb5-19" tabindex="-1"></a><span class="co">#&gt; 12 3.162278e+07 25.558361</span></span>
+<span id="cb5-20"><a href="#cb5-20" tabindex="-1"></a><span class="co">#&gt; 13 1.000000e+08 54.318913</span></span></code></pre></div>
+</div>
+<div id="step-3-the-bootstrap-band" class="section level3">
+<h3>Step 3: the bootstrap band</h3>
+<p>This example uses <code>B = 100</code> to keep the build fast; use
+the default <code>B = 200</code> or more for an analysis.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>final_fit <span class="ot">&lt;-</span> <span class="fu">bootstrap_baseline_uncertainty</span>(</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  <span class="at">fit  =</span> gcv_fit,</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>  <span class="at">B    =</span> <span class="dv">100</span>,</span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>  <span class="at">seed =</span> <span class="dv">501</span></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>)</span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a>final_fit</span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="co">#&gt; &lt;StatARPLSResult&gt;</span></span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a><span class="co">#&gt; Call: gcv_select_lambda(signal = raw_signal, wavenumber = wavenumber,      seed = 501) </span></span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="co">#&gt; Signal length:    500 </span></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="co">#&gt; Converged:        TRUE in 4 iteration(s)</span></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="co">#&gt; Lambda (optimal): 316228 </span></span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a><span class="co">#&gt; Residual variance: 1.969 </span></span>
+<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a><span class="co">#&gt; GCV selection:  13 candidates evaluated, effective df = 8.686 </span></span>
+<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a><span class="co">#&gt; Bootstrap:       100 of 100 replicates converged (0 failed)</span></span></code></pre></div>
+<p>The block length actually used is recorded with the other bootstrap
+diagnostics:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">attr</span>(final_fit, <span class="st">&quot;bootstrap&quot;</span>)<span class="sc">$</span>block_length</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="co">#&gt; [1] 8</span></span></code></pre></div>
+</div>
+<div id="step-4-inspect-the-result" class="section level3">
+<h3>Step 4: inspect the result</h3>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="fu">summary</span>(final_fit)</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="co">#&gt; &lt;summary.StatARPLSResult&gt;</span></span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="co">#&gt; Lambda:              316228 </span></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a><span class="co">#&gt; Converged:           TRUE in 4 iteration(s)</span></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="co">#&gt; Residual variance:   1.969 </span></span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a><span class="co">#&gt; Mean stability-band width: 0.712 </span></span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="co">#&gt; Corrected-signal quantiles:</span></span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="co">#&gt;      0%     25%     50%     75%    100% </span></span>
+<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a><span class="co">#&gt; -3.6991 -0.7283  0.4227  2.0218 82.0645 </span></span>
+<span id="cb8-12"><a href="#cb8-12" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-13"><a href="#cb8-13" tabindex="-1"></a><span class="co">#&gt; --- GCV Parameter Selection ---</span></span>
+<span id="cb8-14"><a href="#cb8-14" tabindex="-1"></a><span class="co">#&gt; Candidates evaluated: 13 </span></span>
+<span id="cb8-15"><a href="#cb8-15" tabindex="-1"></a><span class="co">#&gt; Optimal lambda:       316228 </span></span>
+<span id="cb8-16"><a href="#cb8-16" tabindex="-1"></a><span class="co">#&gt; Effective df:         8.686 </span></span>
+<span id="cb8-17"><a href="#cb8-17" tabindex="-1"></a><span class="co">#&gt; Min GCV score:        1.608 </span></span>
+<span id="cb8-18"><a href="#cb8-18" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-19"><a href="#cb8-19" tabindex="-1"></a><span class="co">#&gt; --- Residual Bootstrap ---</span></span>
+<span id="cb8-20"><a href="#cb8-20" tabindex="-1"></a><span class="co">#&gt; Replicates requested: 100 </span></span>
+<span id="cb8-21"><a href="#cb8-21" tabindex="-1"></a><span class="co">#&gt; Replicates converged: 100 (0 failed) </span></span>
+<span id="cb8-22"><a href="#cb8-22" tabindex="-1"></a><span class="co">#&gt; Mean pointwise SE:    0.1901</span></span></code></pre></div>
+<p><code>summary()</code> reports the selected <code>lambda</code>,
+convergence, the residual variance, the mean width of the stability
+band, quantiles of the corrected signal, and (when present) the GCV and
+bootstrap diagnostics: the number of candidates, the effective degrees
+of freedom, the replicates requested, converged and failed, and the mean
+pointwise standard error.</p>
+<p><code>plot()</code> overlays the raw signal, the baseline and the
+band using base graphics. Set <code>show_band = FALSE</code> to hide the
+band and its legend entry, and pass further graphical arguments such as
+<code>main</code> or <code>xlab</code> through <code>...</code>.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="fu">plot</span>(</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>  final_fit,</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>  <span class="at">main =</span> <span class="st">&quot;ARPLS baseline with bootstrap stability band&quot;</span></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>)</span></code></pre></div>
+<p><img role="img" src="data:image/png;base64,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" /><!-- --></p>
+<p>The corrected spectrum, ready for peak analysis, is
+<code>final_fit$corrected</code>.</p>
+</div>
+<div id="step-5-evaluate-the-baseline-on-a-new-axis" class="section level3">
+<h3>Step 5: evaluate the baseline on a new axis</h3>
+<p><code>predict()</code> interpolates the fitted baseline onto new
+wavenumbers, with <code>method = &quot;linear&quot;</code> (the default) or
+<code>method = &quot;spline&quot;</code>. The <code>rule</code> argument controls
+points outside the fitted range for both methods: <code>rule = 1</code>
+(the default) returns <code>NA</code>, and <code>rule = 2</code> returns
+the nearest boundary value. With <code>method = &quot;spline&quot;</code>,
+<code>rule = 1</code> also warns that extrapolation is not
+supported.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a>new_grid <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">100</span>, <span class="dv">1900</span>, <span class="at">by =</span> <span class="dv">250</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="fu">predict</span>(final_fit, <span class="at">newdata =</span> new_grid)</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a><span class="co">#&gt; [1] 59.89784 80.03926 91.93282 92.48537 83.86919 71.11317 59.83185 57.51880</span></span></code></pre></div>
+</div>
+<div id="step-6-compare-fits" class="section level3">
+<h3>Step 6: compare fits</h3>
+<p><code>compare()</code> puts two or more <code>StatARPLSResult</code>
+objects side by side. Its columns are the label, <code>lambda</code>,
+the effective degrees of freedom (<code>df_effective</code>,
+<code>NA</code> for fits that were not chosen by GCV), the number of
+iterations, the convergence flag, and the mean width of the band.</p>
+<p>Compare fits that carry the same kind of band. Here both fits have
+the provisional band, so the widths are comparable; a bootstrapped fit
+has a different band, usually narrower.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>low_lambda_fit <span class="ot">&lt;-</span> <span class="fu">fit_arpls</span>(</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>  <span class="at">signal     =</span> raw_signal,</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>  <span class="at">wavenumber =</span> wavenumber,</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>  <span class="at">lambda     =</span> <span class="dv">500</span></span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>)</span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a></span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a><span class="fu">compare</span>(gcv_fit, low_lambda_fit, <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">&quot;GCV-selected&quot;</span>, <span class="st">&quot;Low lambda&quot;</span>))</span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a><span class="co">#&gt; &lt;compare.StatARPLSResult&gt;</span></span>
+<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a><span class="co">#&gt;         label   lambda df_effective n_iter converged mean_band_width</span></span>
+<span id="cb11-11"><a href="#cb11-11" tabindex="-1"></a><span class="co">#&gt;  GCV-selected 316227.8     8.685913      4      TRUE        5.500445</span></span>
+<span id="cb11-12"><a href="#cb11-12" tabindex="-1"></a><span class="co">#&gt;    Low lambda    500.0           NA      1      TRUE        9.103349</span></span></code></pre></div>
+</div>
+</div>
+<div id="practical-notes" class="section level2">
+<h2>Practical notes</h2>
+<ul>
+<li><strong>Run time.</strong> The linear solve is dense, so cost grows
+quickly with the number of points: a spectrum of a few hundred points
+fits in milliseconds, but automatic selection and the bootstrap on
+spectra with several thousand points can take many seconds to minutes.
+Thinning an over-sampled spectrum (for example keeping every second
+point) is a simple way to cut the time.</li>
+<li><strong>Reproducibility.</strong> <code>gcv_select_lambda()</code>
+and <code>bootstrap_baseline_uncertainty()</code> take a
+<code>seed</code>; the caller’s random-number state is restored on
+exit.</li>
+<li><strong>Check the plot.</strong> Look at <code>plot()</code> for
+every new type of spectrum. Very broad peaks can be absorbed into the
+baseline, which is a property of the ARPLS method, and a thin band does
+not mean the baseline is correct.</li>
+</ul>
+</div>
+<div id="summary" class="section level2">
+<h2>Summary</h2>
+<p>StatARPLS fits ARPLS baselines (<code>fit_arpls()</code>), can choose
+the smoothing parameter by generalised cross-validation
+(<code>gcv_select_lambda()</code>), and can attach a
+moving-block-bootstrap stability band
+(<code>bootstrap_baseline_uncertainty()</code>). Every stage returns the
+same <code>StatARPLSResult</code> object, which you can print,
+summarise, plot, use for prediction on a new axis, and compare with
+other fits.</p>
 </div>
 
 
