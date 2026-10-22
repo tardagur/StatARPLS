@@ -14,6 +14,14 @@ output:
     df_print: paged
 ---
 
+## Mindmap {.unnumbered}
+
+```{r mindmap, echo = FALSE, out.width = "100%"}
+if (file.exists("figures/mindmap-presentation.drawio.png")) {
+  knitr::include_graphics("figures/mindmap-presentation.drawio.png")
+}
+```
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
                       fig.align = "center", fig.width = 9, fig.height = 4.3)
@@ -63,7 +71,7 @@ Spectra (FTIR, Raman, UV-Vis) = **true peaks** on top of an unwanted, slowly var
 | `hyperSpec` (R) | Spectra container, polynomial and rubberband baselines | No ARPLS or AsLS; manual settings |
 | ARPLS-family papers | Variants such as airPLS, asPLS | Standalone algorithms, not R packages |
 
-- Best $\lambda$ is **dataset-specific** and does not transfer (Liland et al., 2010).
+- Best $\lambda$ is **dataset-specific** and does not transfer [1].
 - ARPLS can also **absorb broad peaks** into the baseline.
 
 ## Core contribution: `StatARPLS`
@@ -97,7 +105,11 @@ $$w_i = \frac{1}{1 + \exp\!\left(2\,\dfrac{r_i - (2s - m)}{s}\right)}$$
 where $m$ and $s$ are the mean and standard deviation of the **negative** residuals.
 
 - Points far **above** the baseline (peaks) get weight near 0, so they stop pulling the fit up.
-- Iterate until the weights stop changing.
+- Iterate until the weights stop changing. (A tiny ridge, $10^{-6}$, is added to the diagonal so the solve never fails.)
+
+- The first equation draws a smooth curve through the data. $\lambda$ sets how stiff the curve is: large $\lambda$ gives a stiff, smooth curve; small $\lambda$ lets it bend.
+- The second equation decides how much each point counts. A point well above the curve is probably a peak, so its weight drops towards 0 and it stops dragging the curve up.
+- Fit, reweight, refit: repeat until the weights settle.
 
 ## Method: what we add
 
@@ -105,13 +117,19 @@ where $m$ and $s$ are the mean and standard deviation of the **negative** residu
 
 $$\mathrm{GCV}(\lambda) = \frac{n \sum_i w_i r_i^2}{\left(n - \mathrm{tr}\,H_\lambda\right)^2}$$
 
-$\mathrm{tr}\,H_\lambda$ is estimated with **Hutchinson's randomised trace estimator**.
+where $H_\lambda = (W + \lambda D^\top D)^{-1} W$, and $\mathrm{tr}\,H_\lambda$ is estimated with **Hutchinson's randomised trace estimator**:
+
+$$\mathrm{tr}\,H_\lambda \approx \frac{1}{m}\sum_{k=1}^{m} u_k^\top H_\lambda u_k, \quad u_k \text{ random } \pm 1 \text{ vectors},\; m = 30$$
+
+**In plain words**: GCV rewards a curve that follows the data, but charges a penalty for flexibility ($\mathrm{tr}\,H_\lambda$ counts how flexible the curve is). The best $\lambda$ balances the two. Hutchinson's trick estimates that flexibility count cheaply instead of computing it exactly.
 
 **Uncertainty by moving-block bootstrap** (fixed $\lambda$):
 
 1. Resample **blocks** of residuals at baseline points (keeps serial correlation).
 2. Pseudo-signal $y^* = \hat z + e^*$, refit the baseline, repeat $B$ times.
-3. Band = the fitted baseline $\pm$ the 2.5% / 97.5% spread of the refits.
+3. Band = the fitted baseline shifted by the 2.5% and 97.5% quantiles of the refits (centred on the fit).
+
+It makes many fake spectra that have the same baseline and the same kind of noise, refit each one, and see how much the baseline moves. A small spread means the baseline is stable against noise.
 
 # Package design
 
@@ -144,7 +162,7 @@ $\mathrm{tr}\,H_\lambda$ is estimated with **Hutchinson's randomised trace estim
 
 ## Runtime view: data flow
 
-*What happens when it runs?* Boxes are processing steps (verbs); arrows are data (nouns).
+*What happens when it runs?* 
 
 ```{r dataflow-a, echo = FALSE, out.width = "100%", eval = file.exists("figures/runtime-dataflow-a.png")}
 knitr::include_graphics("figures/runtime-dataflow-a.png")
@@ -159,7 +177,7 @@ knitr::include_graphics("figures/runtime-dataflow-b.png")
 
 ## Module view: package diagram
 
-*How is the code organised?* Boxes are files (modules); an arrow means "uses". Arrows are not execution order.
+*How is the code organised?* 
 
 ```{r package-diagram, echo = FALSE, out.width = "60%", fig.align = "center", eval = file.exists("figures/module-package.png")}
 knitr::include_graphics("figures/module-package.png")
@@ -173,8 +191,8 @@ knitr::include_graphics("figures/module-package.png")
 ## Minimal working example
 
 ```{r install, eval=FALSE}
-# install.packages("devtools")
-devtools::install_github("https://github.com/tardagur/StatARPLS")
+# install.packages("remotes")
+remotes::install_github("tardagur/StatARPLS", build_vignettes = TRUE)
 ```
 
 ```{r mwe}
@@ -277,14 +295,14 @@ plot(boot_ir)
 
 ## Real data: textile ATR-FTIR (Mendeley, CC BY 4.0)
 
-160 spectra, 4000-550 cm<sup>-1</sup>; 4 fibres shown. Transmission converted to absorbance; every 2nd point kept.
+160 spectra, 4000-550 cm<sup>-1</sup>; 4 fibres shown (first spectrum of each type). Data: Parkar et al. [2], public, CC BY 4.0. Changes: transmission converted to absorbance; every 2nd point kept.
 
 | Fibre | Default grid | Larger minimum $\lambda$ | df | Band width |
 |---|---|---|---|---|
 | Protein (alpaca) | <span class="bad">$\lambda = 100$, follows peaks</span> | $3.2\times10^{8}$ | 4.0 | 0.0018 |
 | Cellulose (cotton) | <span class="good">$3.2\times10^{7}$, good</span> | same | 6.1 | 0.0009 |
 | Polyester (PET) | <span class="bad">$\lambda = 100$, follows peaks</span> | $3.2\times10^{6}$ | 14.7 | 0.0037 |
-| Acrylic (PAN/MA) | $1\times10^{6}$, broad bumps | same | 18.0 | 0.0004 |
+| Acrylic (PAN/MA) | <span class="bad">$1\times10^{6}$, broad bumps</span> | same | 18.0 | 0.0004 |
 
 - The new warning fired on **exactly** the two failed fits.
 
@@ -294,7 +312,7 @@ Fits with the larger minimum $\lambda$ (baseline under the peaks in all four):
 knitr::include_graphics("figures/textile-fits.png")
 ```
 
-Bootstrap stability bands on the same fits. Acrylic's band is thin, but its baseline still follows broad bumps: **a thin band does not mean a correct baseline**.
+Bootstrap stability bands on the same fits. The bands are only 0.0004 to 0.004 wide (see the table), so they are too thin to see at this scale. Acrylic's band is thinnest, but its baseline still follows broad bumps: **a thin band does not mean a correct baseline**.
 
 ```{r textile-bands, echo=FALSE, eval=file.exists("figures/textile-bands.png"), out.width="60%", fig.align="center"}
 knitr::include_graphics("figures/textile-bands.png")
@@ -312,11 +330,11 @@ knitr::include_graphics("figures/textile-bands.png")
 
 ## Quality assurance
 
-- **92 unit tests** (`testthat`), all passing.
+- **98 passing `testthat` tests** (as counted by `devtools::test()`), no failures.
 - **`R CMD check`**: 0 errors, 0 warnings, 0 notes.
 - Full roxygen documentation, an introduction **vignette**, and S3 methods registered in `NAMESPACE`.
 - Code follows the tidyverse style guide; relative paths only.
-- Source on GitHub: `github.com/YOUR-USERNAME/StatARPLS` (open source).
+- Source on GitHub: `github.com/tardagur/StatARPLS` (open source).
 - Not yet on CRAN; `pkgdown` site is planned.
 
 ## Summary
@@ -326,16 +344,11 @@ knitr::include_graphics("figures/textile-bands.png")
 - **Evidence**: over 10x faster than the pure-R reference; about 4 times lower baseline error than untuned AsLS in a known-baseline simulation; works on FTIR; a documented failure mode on 2 of 4 textile spectra, now flagged by a warning.
 - **Next**: sparse solver (to close the speed gap with `baseline`), comparison against AsLS at its best $\lambda$, a better selection rule than plain GCV.
 
+
 **Questions?**
 
-<details>
-<summary><b>Likely questions (click to open)</b></summary>
+## References {.unnumbered}
 
-- **Why compare with AsLS?** ARPLS descends from AsLS (same penalised least squares, adaptive weights instead of fixed ones); the baseline package has AsLS but no ARPLS.
-- **How do you know it is better than `baseline`?** On a simulation with a known baseline, StatARPLS had about 4 times lower RMSE than AsLS at three hand-picked $\lambda$ and won 20 of 20. AsLS was not tuned, so this is the gap against untuned AsLS, not against its best case.
-- **Why is it slower than `baseline`?** `baseline` uses a sparse solver; mine is dense, and my timing also includes the search over 13 $\lambda$ values. A sparse solver is the planned fix.
-- **Why does the corrected spectrum go negative so often?** ARPLS places the baseline through the middle of the noise, so about half the noise points sit below it; that is not a sign of a poor baseline.
-- **Why does GCV fail?** It scores how well the curve fits the data, and a baseline that follows the peaks fits very well.
-- **What does the band mean?** How much the baseline moves when the noise is resampled at fixed lambda; not the baseline's own bias.
+[1]&emsp;K. H. Liland, T. Almøy, and B.-H. Mevik, “Optimal choice of baseline correction for multivariate calibration of spectra,” *Applied Spectroscopy*, vol. 64, no. 9, pp. 1007–1016, 2010, doi: 10.1366/000370210792434350.
 
-</details>
+[2]&emsp;R. Parkar, A. Jain, M. Prendergast-Miller, T. Stanton, K. Sheridan, and M. Gallidabino, “A dataset of infrared (ATR-FTIR) spectra for textile fibres of natural and man-made origin,” Mendeley Data, ver. 3, Feb. 2026, doi: 10.17632/rx3fjgz96x.3. Licence: CC BY 4.0.

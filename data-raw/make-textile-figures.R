@@ -8,7 +8,7 @@
 #   source("data-raw/make-textile-figures.R")
 # A file chooser opens: select the CSV in 02_feature_matrix_raw.
 
-raw_path <- "C:/Users/rntad/Downloads/A dataset of infrared (ATR-FTIR) spectra for texti/A dataset of infrared (ATR-FTIR) spectra for texti/02_feature_matrix_raw/02_feature_matrix_raw_T.csv"
+raw_path <- file.choose()
 raw <- utils::read.csv(raw_path, check.names = FALSE)
 
 # ---- 1. Split metadata and spectra; transmission -> absorbance ----------------
@@ -31,6 +31,7 @@ cat("Axis points:", length(wavenumber), "\n")   # expect 1726
 # ---- 2. Four fibres, automatic lambda on the safer (larger-minimum) grid -------
 chosen <- c("Protein", "Cellulose", "Polyester", "Acrylic")
 idx <- vapply(chosen, function(type) which(meta$Type == type)[1], integer(1))
+print(meta[idx, ])   # which spectra are shown (first of each type); cite in the report
 safe_grid <- 10^seq(4, 9, length.out = 11)
 
 fits_safe <- lapply(idx, function(i)
@@ -56,9 +57,11 @@ draw_panels <- function(fit_list, show_band, use_ylim = FALSE) {
                           format(fit_list[[k]]$lambda, digits = 2, scientific = TRUE), ")")
     if (use_ylim) {
       plot(fit_list[[k]], show_band = show_band, main = panel_title,
+           ylab = "Absorbance",
            ylim = c(-0.01, max(absorbance[idx[k], ]) * 1.05))
     } else {
-      plot(fit_list[[k]], show_band = show_band, main = panel_title)
+      plot(fit_list[[k]], show_band = show_band, main = panel_title,
+           ylab = "Absorbance")
     }
   }
 }
