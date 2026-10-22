@@ -37,8 +37,22 @@ diagonal of the linear system for numerical stability; does not
 materially alter the fitted baseline at default magnitude.}
 }
 \value{
-A validated object of class \code{StatARPLSResult}, as constructed by
-\code{StatARPLSResult()}
+A validated object of class \code{StatARPLSResult}, a list with
+the following elements:
+\itemize{
+\item \code{signal} — numeric vector, length n, the raw input intensities
+\item \code{wavenumber} — numeric vector, length n, the independent axis
+\item \code{baseline} — numeric vector, length n, the fitted ARPLS baseline
+\item \code{corrected} — numeric vector, length n, \code{signal - baseline}
+\item \code{residual_variance} — numeric scalar, variance of the noise residuals
+\item \code{stability_bounds} — numeric matrix, n x 2, a provisional band of the
+baseline plus or minus 1.96 noise standard deviations; replace it with a
+bootstrap band using \code{bootstrap_baseline_uncertainty()}
+\item \code{lambda} — numeric scalar, the smoothing parameter used
+\item \code{n_iter} — integer scalar, reweighting iterations performed
+\item \code{converged} — logical scalar, whether the weights converged
+\item \code{call} — language object, the matched call
+}
 }
 \description{
 Fits a smooth ARPLS baseline to a spectral signal via iterative
@@ -47,4 +61,19 @@ reweighted least squares, using the compiled \code{arpls_fit_cpp()} engine
 iteration. Implemented entirely from first principles. The reported
 residual variance and the provisional stability band are based on the
 noise level estimated from baseline points only, not on the peaks.
+}
+\examples{
+set.seed(1)
+wavenumber <- seq(400, 1800, length.out = 300)
+peaks <- exp(-((wavenumber - 1000) / 25)^2) +
+  0.6 * exp(-((wavenumber - 1400) / 30)^2)
+background <- 0.001 * (wavenumber - 400) + 0.2
+spectrum <- peaks + background + rnorm(300, sd = 0.01)
+
+fit <- fit_arpls(spectrum, wavenumber = wavenumber, lambda = 1e6)
+print(fit)
+summary(fit)
+plot(fit, show_band = FALSE)
+predict(fit, newdata = c(500, 1000, 1500))
+
 }

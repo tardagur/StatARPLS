@@ -106,6 +106,22 @@ warn_if_lambda_at_grid_edge <- function(lambda_grid, best_lambda) {
 #' * `df_effective` — numeric scalar, the effective degrees of freedom at
 #'   the selected lambda
 #'
+#' @examples
+#' set.seed(1)
+#' wavenumber <- seq(400, 1800, length.out = 300)
+#' peaks <- exp(-((wavenumber - 1000) / 25)^2) +
+#'   0.6 * exp(-((wavenumber - 1400) / 30)^2)
+#' spectrum <- peaks + 0.001 * (wavenumber - 400) + 0.2 +
+#'   rnorm(300, sd = 0.01)
+#'
+#' gcv_fit <- gcv_select_lambda(
+#'   spectrum,
+#'   wavenumber = wavenumber,
+#'   lambda_grid = 10^seq(4, 8, length.out = 5),
+#'   seed = 1
+#' )
+#' attr(gcv_fit, "gcv")$lambda_optimal
+#'
 #' @export
 gcv_select_lambda <- function(signal,
                               wavenumber = seq_along(signal),
@@ -337,6 +353,19 @@ moving_block_bootstrap_sample <- function(residual_pool,
 #' * `n_failed` — integer scalar, replicates that errored or failed to converge
 #' * `block_length` — integer scalar, the block length used
 #' * `boot_se` — numeric vector, pointwise bootstrap standard errors
+#'
+#' @examples
+#' set.seed(1)
+#' wavenumber <- seq(400, 1800, length.out = 300)
+#' peaks <- exp(-((wavenumber - 1000) / 25)^2) +
+#'   0.6 * exp(-((wavenumber - 1400) / 30)^2)
+#' spectrum <- peaks + 0.001 * (wavenumber - 400) + 0.2 +
+#'   rnorm(300, sd = 0.01)
+#'
+#' fit <- fit_arpls(spectrum, wavenumber = wavenumber, lambda = 1e6)
+#' boot_fit <- bootstrap_baseline_uncertainty(fit, B = 20, seed = 1)
+#' attr(boot_fit, "bootstrap")$B_effective
+#' plot(boot_fit)
 #'
 #' @export
 bootstrap_baseline_uncertainty <- function(fit,

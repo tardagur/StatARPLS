@@ -65,3 +65,17 @@ Lambda is held fixed across replicates so the bootstrap quantifies
 baseline instability at the selected smoothing level, not uncertainty in
 the smoothing-parameter choice itself.
 }
+\examples{
+set.seed(1)
+wavenumber <- seq(400, 1800, length.out = 300)
+peaks <- exp(-((wavenumber - 1000) / 25)^2) +
+  0.6 * exp(-((wavenumber - 1400) / 30)^2)
+spectrum <- peaks + 0.001 * (wavenumber - 400) + 0.2 +
+  rnorm(300, sd = 0.01)
+
+fit <- fit_arpls(spectrum, wavenumber = wavenumber, lambda = 1e6)
+boot_fit <- bootstrap_baseline_uncertainty(fit, B = 20, seed = 1)
+attr(boot_fit, "bootstrap")$B_effective
+plot(boot_fit)
+
+}

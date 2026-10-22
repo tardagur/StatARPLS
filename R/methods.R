@@ -369,6 +369,18 @@ compare <- function(x, ...) {
 #' * `mean_band_width` — numeric, mean pointwise width of
 #'   `stability_bounds`
 #'
+#' @examples
+#' set.seed(1)
+#' wavenumber <- seq(400, 1800, length.out = 300)
+#' peaks <- exp(-((wavenumber - 1000) / 25)^2) +
+#'   0.6 * exp(-((wavenumber - 1400) / 30)^2)
+#' spectrum <- peaks + 0.001 * (wavenumber - 400) + 0.2 +
+#'   rnorm(300, sd = 0.01)
+#'
+#' smooth_fit <- fit_arpls(spectrum, wavenumber = wavenumber, lambda = 1e6)
+#' flexible_fit <- fit_arpls(spectrum, wavenumber = wavenumber, lambda = 1e3)
+#' compare(smooth_fit, flexible_fit, labels = c("lambda 1e6", "lambda 1e3"))
+#'
 #' @export
 compare.StatARPLSResult <- function(x, ..., labels = NULL) {
   if (!inherits(x, "StatARPLSResult")) {

@@ -293,8 +293,34 @@ arpls_engine <- function(signal, lambda, ratio, max_iter, ridge) {
 #'   diagonal of the linear system for numerical stability; does not
 #'   materially alter the fitted baseline at default magnitude.
 #'
-#' @return A validated object of class `StatARPLSResult`, as constructed by
-#' `StatARPLSResult()`
+#' @return A validated object of class `StatARPLSResult`, a list with
+#' the following elements:
+#' * `signal` — numeric vector, length n, the raw input intensities
+#' * `wavenumber` — numeric vector, length n, the independent axis
+#' * `baseline` — numeric vector, length n, the fitted ARPLS baseline
+#' * `corrected` — numeric vector, length n, `signal - baseline`
+#' * `residual_variance` — numeric scalar, variance of the noise residuals
+#' * `stability_bounds` — numeric matrix, n x 2, a provisional band of the
+#'   baseline plus or minus 1.96 noise standard deviations; replace it with a
+#'   bootstrap band using `bootstrap_baseline_uncertainty()`
+#' * `lambda` — numeric scalar, the smoothing parameter used
+#' * `n_iter` — integer scalar, reweighting iterations performed
+#' * `converged` — logical scalar, whether the weights converged
+#' * `call` — language object, the matched call
+#'
+#' @examples
+#' set.seed(1)
+#' wavenumber <- seq(400, 1800, length.out = 300)
+#' peaks <- exp(-((wavenumber - 1000) / 25)^2) +
+#'   0.6 * exp(-((wavenumber - 1400) / 30)^2)
+#' background <- 0.001 * (wavenumber - 400) + 0.2
+#' spectrum <- peaks + background + rnorm(300, sd = 0.01)
+#'
+#' fit <- fit_arpls(spectrum, wavenumber = wavenumber, lambda = 1e6)
+#' print(fit)
+#' summary(fit)
+#' plot(fit, show_band = FALSE)
+#' predict(fit, newdata = c(500, 1000, 1500))
 #'
 #' @export
 fit_arpls <- function(signal,

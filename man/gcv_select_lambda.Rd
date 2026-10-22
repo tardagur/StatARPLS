@@ -60,3 +60,20 @@ of freedom efficiently. A grid point whose linear system is singular or
 near-singular at the candidate lambda is skipped (scored \code{Inf}) rather
 than aborting the entire search.
 }
+\examples{
+set.seed(1)
+wavenumber <- seq(400, 1800, length.out = 300)
+peaks <- exp(-((wavenumber - 1000) / 25)^2) +
+  0.6 * exp(-((wavenumber - 1400) / 30)^2)
+spectrum <- peaks + 0.001 * (wavenumber - 400) + 0.2 +
+  rnorm(300, sd = 0.01)
+
+gcv_fit <- gcv_select_lambda(
+  spectrum,
+  wavenumber = wavenumber,
+  lambda_grid = 10^seq(4, 8, length.out = 5),
+  seed = 1
+)
+attr(gcv_fit, "gcv")$lambda_optimal
+
+}

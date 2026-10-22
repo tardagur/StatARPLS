@@ -45,3 +45,16 @@ present), iterations to convergence, and mean stability-band width.
 Useful for contrasting fits at different lambda values, on different
 spectra, or before/after applying \code{bootstrap_baseline_uncertainty()}.
 }
+\examples{
+set.seed(1)
+wavenumber <- seq(400, 1800, length.out = 300)
+peaks <- exp(-((wavenumber - 1000) / 25)^2) +
+  0.6 * exp(-((wavenumber - 1400) / 30)^2)
+spectrum <- peaks + 0.001 * (wavenumber - 400) + 0.2 +
+  rnorm(300, sd = 0.01)
+
+smooth_fit <- fit_arpls(spectrum, wavenumber = wavenumber, lambda = 1e6)
+flexible_fit <- fit_arpls(spectrum, wavenumber = wavenumber, lambda = 1e3)
+compare(smooth_fit, flexible_fit, labels = c("lambda 1e6", "lambda 1e3"))
+
+}
