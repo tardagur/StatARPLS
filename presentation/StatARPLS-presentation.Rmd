@@ -1,7 +1,7 @@
 ---
 title: "<code>StatARPLS</code>"
-subtitle: "Automatic smoothing selection and uncertainty for ARPLS baseline correction of spectra"
-author: "Taruna Dagur , 300686751"
+subtitle: "An R Package for Baseline Correction of Spectra with Automatic Smoothing and Uncertainty"
+author: "Taruna Dagur"
 date: "GitHub: https://github.com/tardagur/StatARPLS"
 output:
   html_document:
@@ -56,7 +56,7 @@ body { font-size: 18px; }
 
 Spectra (FTIR, Raman, UV-Vis) = **true peaks** on top of an unwanted, slowly varying **baseline**.
 
-- The baseline must be removed before peak detection or quantitative analysis.
+- Baseline correction is often needed before peak detection.
 - The true baseline is **never observed**, so it has to be estimated.
 - The popular statistical method, **ARPLS**, depends on user-chosen parameters:
     - $\lambda$ controls how flexible the baseline is.
@@ -65,11 +65,11 @@ Spectra (FTIR, Raman, UV-Vis) = **true peaks** on top of an unwanted, slowly var
 
 ## Existing tools and their gaps
 
-| Tool | What it offers | Gap |
+| Tool | What it offers | Gap in the comparison |
 |---|---|---|
-| `baseline` (R) | AsLS, IRLS, polynomial fitting, others | $\lambda$ chosen by hand; no ARPLS; no uncertainty |
-| `hyperSpec` (R) | Spectra container, polynomial and rubberband baselines | No ARPLS or AsLS; manual settings |
-| ARPLS-family papers | Variants such as airPLS, asPLS | Standalone algorithms, not R packages |
+| `baseline` (R) | Several baseline correction methods, including AsLS, IRLS and polynomial fitting. | In the methods compared, lambda is set manually. ARPLS and a bootstrap-based baseline stability band are not provided by these methods. |
+| `hyperSpec` (R) | Tools for handling spectral data, with polynomial and rubberband baseline correction. | The methods compared do not provide the same ARPLS workflow with automatic lambda selection and a bootstrap-based stability band. |
+| ARPLS-related papers | Published ARPLS-related methods and variants, such as airPLS and asPLS. | StatARPLS focuses on integrating baseline fitting, automatic lambda selection and bootstrap-based stability assessment into one documented R package. |
 
 - Best $\lambda$ is **dataset-specific** and does not transfer [1].
 - ARPLS can also **absorb broad peaks** into the baseline.
@@ -79,8 +79,11 @@ Spectra (FTIR, Raman, UV-Vis) = **true peaks** on top of an unwanted, slowly var
 **What it adds**
 
 - **Automatic $\lambda$**: generalised cross-validation (GCV) with a fast trace estimate.
+
 - **Baseline uncertainty**: moving-block residual bootstrap gives a stability band.
-- **Compiled solver** (Rcpp / RcppArmadillo), built from first principles; **not a wrapper**.
+
+- **Compiled solver** (Rcpp / RcppArmadillo)
+
 - One S3 object, `StatARPLSResult`, with `print`, `summary`, `plot`, `predict`, `compare`.
 
 **What it does not claim**
@@ -164,11 +167,11 @@ It makes many fake spectra that have the same baseline and the same kind of nois
 
 *What happens when it runs?* 
 
-```{r dataflow-a, echo = FALSE, out.width = "100%", eval = file.exists("figures/runtime-dataflow-a.png")}
-knitr::include_graphics("figures/runtime-dataflow-a.png")
+```{r dataflow-a, echo = FALSE, out.width = "200%", eval = file.exists("figures/runtimeview.a.drawio.png")}
+knitr::include_graphics("figures/runtimeview.a.drawio.png")
 ```
 
-```{r dataflow-b, echo = FALSE, out.width = "100%", eval = file.exists("figures/runtime-dataflow-b.png")}
+```{r dataflow-b, echo = FALSE, out.width = "200%", eval = file.exists("figures/runtime-dataflow-b.png")}
 knitr::include_graphics("figures/runtime-dataflow-b.png")
 ```
 
@@ -291,7 +294,7 @@ boot_ir <- bootstrap_baseline_uncertainty(fit_ir, B = 50, seed = 2)
 plot(boot_ir)
 ```
 
-- 16 plant-extract spectra, 1,868 points each. The band is thin because the noise is small.
+- 16 spectra (14 saw palmetto extracts and 2 reference oils), 1,868 points each.[3] The band is thin because the noise is small.
 
 ## Real data: textile ATR-FTIR (Mendeley, CC BY 4.0)
 
@@ -320,10 +323,14 @@ knitr::include_graphics("figures/textile-bands.png")
 
 ## Honest findings and limits
 
-- **GCV can under-smooth** reweighted fits: it rewards following the data, so it can pick the smallest $\lambda$. Mitigation: a warning, plus a larger minimum $\lambda$.
+- GCV can select a lambda that is too small for some reweighted fits, producing an overly flexible baseline. StatARPLS warns the user, and a larger minimum lambda (grid) can be supplied to reduce this risk. The fitted baseline should still be checked.
+
 - **The band is sampling stability, not total error.** A thin band does not mean the baseline is right (Acrylic is thin but follows broad bumps).
+
 - **Broad peaks can be absorbed** into the baseline, a known ARPLS weakness.
+
 - **Dense solver**: slow beyond a few thousand points.
+
 - Bootstrap pool excludes peak points, so block dependence is approximate across gaps.
 
 # Quality and summary
@@ -333,15 +340,26 @@ knitr::include_graphics("figures/textile-bands.png")
 - **98 passing `testthat` tests** (as counted by `devtools::test()`), no failures.
 - **`R CMD check`**: 0 errors, 0 warnings, 0 notes.
 - Full roxygen documentation, an introduction **vignette**, and S3 methods registered in `NAMESPACE`.
-- Code follows the tidyverse style guide; relative paths only.
 - Source on GitHub: `github.com/tardagur/StatARPLS` (open source).
-- Not yet on CRAN; `pkgdown` site is planned.
+
 
 ## Summary
 
 - **Problem**: ARPLS needs hand-tuned $\lambda$ and gives no uncertainty.
-- **`StatARPLS`**: automatic $\lambda$ (GCV) + bootstrap stability band + compiled solver, in one tested S3 package.
-- **Evidence**: over 10x faster than the pure-R reference; about 4 times lower baseline error than untuned AsLS in a known-baseline simulation; works on FTIR; a documented failure mode on 2 of 4 textile spectra, now flagged by a warning.
+
+- **`StatARPLS`**: automatic $\lambda$ (GCV) + bootstrap stability band +
+compiled solver, in one tested S3 package.
+
+**Evidence**:
+
+* The compiled solver was over 10 times faster than the pure-R reference implementation in the benchmark.
+
+* In the known-baseline simulation, StatARPLS had approximately four times lower baseline RMSE than the particular untuned AsLS setting tested.
+
+* Testing on textile spectra revealed a failure mode in 2 of the 4 spectra examined; the warning helps flag this issue.
+
+* Performance and accuracy depend on the dataset and comparison settings.
+
 - **Next**: sparse solver (to close the speed gap with `baseline`), comparison against AsLS at its best $\lambda$, a better selection rule than plain GCV.
 
 
@@ -352,3 +370,5 @@ knitr::include_graphics("figures/textile-bands.png")
 [1]&emsp;K. H. Liland, T. Almøy, and B.-H. Mevik, “Optimal choice of baseline correction for multivariate calibration of spectra,” *Applied Spectroscopy*, vol. 64, no. 9, pp. 1007–1016, 2010, doi: 10.1366/000370210792434350.
 
 [2]&emsp;R. Parkar, A. Jain, M. Prendergast-Miller, T. Stanton, K. Sheridan, and M. Gallidabino, “A dataset of infrared (ATR-FTIR) spectra for textile fibres of natural and man-made origin,” Mendeley Data, ver. 3, Feb. 2026, doi: 10.17632/rx3fjgz96x.3. Licence: CC BY 4.0.
+
+[3]&emsp;B. A. Hanson, “ChemoSpec: Exploratory chemometrics for spectroscopy,” R package version 6.3.1, 2025. [Online]. Available: <https://CRAN.R-project.org/package=ChemoSpec>
