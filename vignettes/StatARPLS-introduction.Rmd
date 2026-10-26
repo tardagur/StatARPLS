@@ -1,10 +1,10 @@
 ---
-title: "Introduction to StatARPLS: Statistical Baseline Correction"
+title: "An R Package for Baseline Correction of Spectra with Automatic Smoothing and Uncertainty"
 author: "Taruna Dagur"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Introduction to StatARPLS: Statistical Baseline Correction}
+  %\VignetteIndexEntry{An R Package for Baseline Correction of Spectra with Automatic Smoothing and Uncertainty}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -27,7 +27,9 @@ has to be estimated and subtracted. Because the true baseline is never
 observed, this is a statistical estimation problem.
 
 StatARPLS estimates the baseline with Asymmetrically Reweighted Penalized
-Least Squares (ARPLS). It provides:
+Least Squares (ARPLS) of Baek et al. [1]. The package is written from first
+principles in R and C++ and adds automatic choice of the smoothing parameter and
+an uncertainty diagnostic. It provides:
 
 * a baseline fit for a smoothing parameter you choose (`fit_arpls()`);
 * automatic selection of that parameter by generalised cross-validation
@@ -84,6 +86,12 @@ $$
 \sum_i w_i (y_i - z_i)^2 \;+\; \lambda \sum_j \left(\mathbf{D}\mathbf{z}\right)_j^2
 $$
 
+Here $w_i \ge 0$ is the weight of point $i$ (near 1: the point is treated as
+background; near 0: it is treated as a peak and ignored), $\lambda \ge 0$ is the
+smoothing parameter, and $(\mathbf{D}\mathbf{z})_j = z_j - 2z_{j+1} + z_{j+2}$
+is the second difference of $\mathbf{z}$, which is zero for a straight line and
+large where the curve bends.
+
 Larger $\lambda$ gives a smoother baseline. Smaller $\lambda$ lets the
 baseline follow finer structure, at the risk of absorbing real peaks. For fixed
 weights the minimiser solves the linear system
@@ -93,7 +101,10 @@ $$
   = \mathbf{W}\mathbf{y}
 $$
 
-where $\mathbf{W}$ is the diagonal matrix of the weights. The system is solved
+where $\mathbf{W} = \mathrm{diag}(w_1, \dots, w_n)$ is the diagonal matrix of the
+weights and $\mathbf{D}^{\top}$ is the transpose of $\mathbf{D}$. The package adds
+the small `ridge` value (default $10^{-6}$) to the diagonal of the left-hand
+matrix for numerical stability. The system is solved
 densely at each iteration by a compiled Rcpp/RcppArmadillo routine, so run time
 grows quickly with the number of points; see "Practical notes".
 
@@ -108,8 +119,10 @@ $$
 w_i = \frac{1}{1 + \exp\!\left(\dfrac{2\left(r_i - (2s - m)\right)}{s}\right)}
 $$
 
-Weights are close to 1 for baseline points and close to 0 for peak points.
-The loop stops when the relative change in the weights falls below `ratio`, or
+Here $r_i$ is the residual of point $i$, and $m$ ($< 0$) and $s$ ($> 0$) are
+computed from the negative residuals only, so $s$ acts as a noise level. The
+function is a logistic curve: the weight is close to 1 for baseline points and
+close to 0 for peak points, and it equals 0.5 when $r_i = 2s - m$. The loop stops when the relative change in the weights falls below `ratio`, or
 after `max_iter` iterations.
 
 ## Fitting with a fixed `lambda`
@@ -145,17 +158,32 @@ $\pm 1.96$ standard-deviation band based on `residual_variance`.
 
 `gcv_select_lambda()` evaluates a grid of candidate values (`lambda_grid`,
 by default `10^seq(2, 8, length.out = 13)`) and returns the fit with the lowest
-generalised cross-validation (GCV) score,
+generalised cross-validation (GCV) score [2],
 
 $$
 \mathrm{GCV}(\lambda) = \frac{n \sum_i w_i r_i^2}{\left(n - \mathrm{tr}\,\mathbf{H}_\lambda\right)^2},
 $$
 
-where $\mathrm{tr}\,\mathbf{H}_\lambda$ is the effective degrees of freedom of
-the fit. Forming the hat matrix explicitly would be too expensive for every
-grid point, so the trace is estimated with Hutchinson's stochastic estimator:
-`n_probe` random vectors (default 30) are pushed through the same linear solve
-used for fitting. Use `seed` for reproducible results.
+where $n$ is the number of points, $w_i$ and $r_i$ are the final weights and
+residuals of the fit, and $\mathbf{H}_\lambda = \left(\mathbf{W} + \lambda\,\mathbf{D}^{\top}\mathbf{D}\right)^{-1}\mathbf{W}$
+is the hat matrix that maps $\mathbf{y}$ to the fitted baseline. Its trace,
+$\mathrm{tr}\,\mathbf{H}_\lambda$, is the effective degrees of freedom of the
+fit: the numerator measures how far the baseline is from the data, and the
+denominator grows smaller as the baseline becomes more flexible, so flexible
+fits are penalised.
+
+Forming the hat matrix explicitly would be too expensive for every grid point,
+so the trace is estimated with Hutchinson's stochastic estimator [3],
+
+$$
+\mathrm{tr}\,\mathbf{H}_\lambda \;\approx\; \frac{1}{K}\sum_{k=1}^{K}
+\mathbf{u}_k^{\top}\mathbf{H}_\lambda\mathbf{u}_k ,
+$$
+
+where each $\mathbf{u}_k$ is a random vector of $\pm 1$ entries and $K$ is
+`n_probe` (default 30). Each product $\mathbf{H}_\lambda\mathbf{u}_k$ needs one
+pass through the same linear solve used for fitting. Use `seed` for reproducible
+results.
 
 The GCV trace is stored on the result and can be read with
 `attr(fit, "gcv")`, which holds `lambda_grid`, `gcv_scores`, `lambda_optimal`
@@ -173,7 +201,7 @@ type of spectrum.
 
 A fitted baseline is a point estimate.
 `bootstrap_baseline_uncertainty(fit, B, block_length, seed)` shows how much it
-moves when the noise is resampled. It uses a **moving block bootstrap** on the
+moves when the noise is resampled. It uses a **moving block bootstrap** [4] on the
 residuals: overlapping blocks of neighbouring residuals are drawn with
 replacement and joined into a pseudo-residual series, which is added to the
 fitted baseline. The baseline is refitted to each pseudo-signal, and the
@@ -240,7 +268,8 @@ gcv_fit <- gcv_select_lambda(
 gcv_fit
 ```
 
-The grid search is kept on the object:
+The grid search is kept on the object. The score curve need not be smooth or
+convex in $\lambda$, so inspect the whole table rather than only the minimum:
 
 ```{r gcv-diagnostics}
 gcv_diagnostics <- attr(gcv_fit, "gcv")
@@ -356,3 +385,22 @@ attach a moving-block-bootstrap stability band
 (`bootstrap_baseline_uncertainty()`). Every stage returns the same
 `StatARPLSResult` object, which you can print, summarise, plot, use for
 prediction on a new axis, and compare with other fits.
+
+## References
+
+[1] S.-J. Baek, A. Park, Y.-J. Ahn, and J. Choo, "Baseline correction using
+asymmetrically reweighted penalized least squares smoothing," *Analyst*,
+vol. 140, no. 1, pp. 250-257, 2015, doi: 10.1039/C4AN01061B.
+
+[2] P. Craven and G. Wahba, "Smoothing noisy data with spline functions:
+Estimating the correct degree of smoothing by the method of generalized
+cross-validation," *Numer. Math.*, vol. 31, no. 4, pp. 377-403, 1978,
+doi: 10.1007/BF01404567.
+
+[3] M. F. Hutchinson, "A stochastic estimator of the trace of the influence
+matrix for Laplacian smoothing splines," *Commun. Stat. Simul. Comput.*,
+vol. 19, no. 2, pp. 433-450, 1990, doi: 10.1080/03610919008812866.
+
+[4] H. R. Künsch, "The jackknife and the bootstrap for general stationary
+observations," *Ann. Statist.*, vol. 17, no. 3, pp. 1217-1241, 1989,
+doi: 10.1214/aos/1176347265.

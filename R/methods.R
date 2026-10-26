@@ -25,14 +25,17 @@
 #' @method print StatARPLSResult
 #' @export
 print.StatARPLSResult <- function(x, ...) {
+  gcv_info <- attr(x, "gcv")
+  lambda_label <- if (is.null(gcv_info)) "Lambda:" else "Lambda (optimal):"
+  call_text <- gsub("\\s+", " ", paste(deparse(x$call), collapse = " "))
+
   cat("<StatARPLSResult>\n")
-  cat("Call:", deparse(x$call), "\n\n")
+  cat("Call:", call_text, "\n\n")
   cat("Signal length:   ", length(x$signal), "\n")
   cat("Converged:       ", x$converged, "in", x$n_iter, "iteration(s)\n")
-  cat("Lambda (optimal):", format(x$lambda, digits = 4), "\n")
+  cat(sprintf("%-17s", lambda_label), format(x$lambda, digits = 4), "\n")
   cat("Residual variance:", format(x$residual_variance, digits = 4), "\n")
 
-  gcv_info <- attr(x, "gcv")
   if (!is.null(gcv_info)) {
     cat("\nGCV selection: ", length(gcv_info$lambda_grid), "candidates evaluated,",
         "effective df =", format(gcv_info$df_effective, digits = 4), "\n")
