@@ -2,7 +2,6 @@
 title: "<code>StatARPLS</code>"
 subtitle: "An R Package for Baseline Correction of Spectra with Automatic Smoothing and Uncertainty"
 author: "Taruna Dagur"
-date: "GitHub: https://github.com/tardagur/StatARPLS"
 output:
   html_document:
     theme: flatly
