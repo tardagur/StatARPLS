@@ -1,9 +1,8 @@
 Package: StatARPLS
-Title: Automatic Statistical Baseline Correction via Asymmetrically
-    Reweighted Penalized Least Squares
+Title: An R Package for Baseline Correction of Spectra with Automatic Smoothing and Uncertainty
 Version: 0.1.0
 Authors@R: 
-    person("Taruna", "Dagur", , "dagurtaru@myvuw.ac.nz", role = c("aut", "cre"))
+    person("Taruna", "Dagur", , "tardagur@gmail.com", role = c("aut", "cre"))
 Description: Provides a from-first-principles implementation of Asymmetrically
     Reweighted Penalized Least Squares (ARPLS) baseline correction for
     spectroscopic data. The smoothing parameter is chosen automatically by
