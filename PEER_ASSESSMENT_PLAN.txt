@@ -1,10 +1,5 @@
-PEER ASSESSMENT PLAN (UPDATED VERSION 2) - STATARPLS
-DATA 501, Victoria University of Wellington
-Author: Taruna Dagur (Student ID 300686751)
-
-This version replaces the Week 7 snapshot plan. It (a) describes the
-current package, and (b) records how each finding from the peer review of
-the first plan was handled (Section 5).
+PEER ASSESSMENT PLAN - STATARPLS
+Author: Taruna Dagur
 
 ============================================================
 1. INSTALLATION AND VERIFICATION PIPELINE
@@ -15,7 +10,10 @@ lines marked [shell] go in a terminal (bash, PowerShell or Git Bash).
 Do not mix them: "setwd()" is an R function and fails in a shell.
 
 Prerequisites
-  - R, and the packages "remotes" and "devtools".
+  - R, and the packages "remotes", "devtools", "knitr" and "rmarkdown"
+    (knitr and rmarkdown are needed to build the vignette and to run
+    devtools::check()).
+  - Git, for the clone step (Step 4).
   - A C++ compiler toolchain, because the package contains compiled code:
     Rtools on Windows, Xcode command line tools on macOS, build-essential
     on Linux.
@@ -25,18 +23,24 @@ Prerequisites
     [R]  packageVersion("devtools")
     [R]  packageVersion("remotes")
 
-  -   - The author tested with: R 4.5.2 (2025-10-31, Windows), devtools 2.5.2,
+  - The author tested with: R 4.5.2 (2025-10-31, Windows), devtools 2.5.2,
     remotes 2.5.0.
 
 Step 1 [R] - Install the helper packages if needed:
 
-    install.packages(c("remotes", "devtools"))
+    install.packages(c("remotes", "devtools", "knitr", "rmarkdown"))
 
 Step 2 [R] - Install StatARPLS from GitHub:
 
-    remotes::install_github("tardagur/StatARPLS")
+    remotes::install_github("tardagur/StatARPLS", build_vignettes = TRUE)
 
-  Note: installation compiles C++ code and can take a minute or two.
+  Notes:
+  - Installation compiles C++ code and builds the vignette; this can take
+    a minute or two.
+  - If R asks "Which would you like to update?", type 3 (None). The prompt
+    is about other installed packages and is unrelated to StatARPLS.
+  - If R says the package is "in use and will not be installed", restart R
+    and run the command again before calling library(StatARPLS).
 
 Step 3 [R] - Load the package:
 
@@ -73,7 +77,7 @@ Step 6 [R] (recommended) - Full package check:
     devtools::check()
 
   Expected: 0 errors | 0 warnings | 0 notes. (The check builds the
-  vignette and takes several minutes. Report anything that is not 0.)
+  vignette and takes a minute or two. Report anything that is not 0.)
 
 Step 7 [R] (optional) - Read the introduction vignette:
 
@@ -132,8 +136,14 @@ Quick example to try (a synthetic spectrum with one peak):
     compare(fit, boot)
 
 What to check: the red baseline lies under the peak and follows the slow
-upward drift; the shaded band is thin; with show_band = FALSE the band AND
-its legend entry both disappear; predict() returns three values.
+upward drift; the shaded band is very thin (it is drawn but may be barely
+visible at this scale); with show_band = FALSE the band AND its legend
+entry both disappear; predict() returns three values.
+
+Note on compare(fit, boot): the two rows carry different kinds of band
+(fit has the provisional +/- 1.96 SD band, boot has the bootstrap band),
+so their mean_band_width values are not directly comparable. The other
+columns (lambda, iterations, convergence) are.
 
 
 ============================================================
@@ -295,7 +305,7 @@ changed; DEFERRED = acknowledged, not changed (reason given).
 
 
 ============================================================
-6. KNOWN LIMITATIONS (disclosed, not hidden)
+6. KNOWN LIMITATIONS
 ============================================================
 
  - GCV can pick the smallest lambda in the grid on some real spectra, so
@@ -310,7 +320,3 @@ changed; DEFERRED = acknowledged, not changed (reason given).
    slow (automatic lambda selection at about 1,900 points takes a couple
    of seconds; the bootstrap takes longer). A sparse/banded solver is
    future work.
-
-============================================================
-END OF DOCUMENT
-============================================================
