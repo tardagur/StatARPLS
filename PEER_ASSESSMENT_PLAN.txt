@@ -10,7 +10,7 @@ lines marked [shell] go in a terminal (bash, PowerShell or Git Bash).
 Do not mix them: "setwd()" is an R function and fails in a shell.
 
 Prerequisites
-  - R, and the packages "remotes", "devtools", "knitr" and "rmarkdown"
+  - R, and the packages "pak", "devtools", "knitr" and "rmarkdown"
     (knitr and rmarkdown are needed to build the vignette and to run
     devtools::check()).
   - Git, for the clone step (Step 4).
@@ -21,24 +21,23 @@ Prerequisites
 
     [R]  R.version.string
     [R]  packageVersion("devtools")
-    [R]  packageVersion("remotes")
+    [R]  packageVersion("pak")
 
   - The author tested with: R 4.5.2 (2025-10-31, Windows), devtools 2.5.2,
-    remotes 2.5.0.
+    pak 0.11.1.
 
 Step 1 [R] - Install the helper packages if needed:
 
-    install.packages(c("remotes", "devtools", "knitr", "rmarkdown"))
+    install.packages(c("pak", "devtools", "knitr", "rmarkdown"))
 
 Step 2 [R] - Install StatARPLS from GitHub:
 
-    remotes::install_github("tardagur/StatARPLS", build_vignettes = TRUE)
+    pak::pak("tardagur/StatARPLS")
 
   Notes:
-  - Installation compiles C++ code and builds the vignette; this can take
-    a minute or two.
-  - If R asks "Which would you like to update?", type 3 (None). The prompt
-    is about other installed packages and is unrelated to StatARPLS.
+  - Installation compiles C++ code and can take a minute or two.
+  - pak asks "Do you want to continue (Y/n)?". Type Y.
+  - This install does not build the vignette; see Step 7.
   - If R says the package is "in use and will not be installed", restart R
     and run the command again before calling library(StatARPLS).
 
@@ -79,12 +78,13 @@ Step 6 [R] (recommended) - Full package check:
   Expected: 0 errors | 0 warnings | 0 notes. (The check builds the
   vignette and takes a minute or two. Report anything that is not 0.)
 
-Step 7 [R] (optional) - Read the introduction vignette:
+Step 7 [R] (optional) - Read the introduction vignette. From the cloned
+folder (Step 4), install with vignettes and open it:
 
-    vignette("StatARPLS-introduction", package = "StatARPLS")
+    devtools::install(build_vignettes = TRUE)
+    browseVignettes("StatARPLS")
 
-  (If it is not listed, the package was installed without building
-  vignettes; open vignettes/StatARPLS-introduction.Rmd instead.)
+  (Alternatively, open vignettes/StatARPLS-introduction.Rmd directly.)
 
 
 ============================================================
@@ -259,8 +259,9 @@ changed; DEFERRED = acknowledged, not changed (reason given).
 
  #  Finding                                         Status     Action
  -- ----------------------------------------------- ---------- ------------------------------------------
- 1  Dependency versions not specified; "remotes"    CLARIFIED  Section 1 now lists remotes and devtools,
-    is required.                                               a C++ toolchain, and asks reviewers to
+ 1  Dependency versions not specified; "remotes"    CLARIFIED  Section 1 now lists pak (the current
+    is required.                                               replacement for remotes) and devtools,
+                                                               a C++ toolchain, and asks reviewers to
                                                                record versions.
  2  Unclear whether commands go in console or       CLARIFIED  Every command is marked [R] or [shell];
     terminal (setwd failed in bash).                           the clone step uses "cd" in the shell.
